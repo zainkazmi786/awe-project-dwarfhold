@@ -8,7 +8,7 @@ The exact shortage consequence may be chosen by your team, but it must affect ga
 
 ## D2 — Useful tools, weapons, and equipment (20%)
 
-As a player, I want crafted tools to have a meaningful use. I should be able to equip an available tool to a dwarf, see who owns it, and receive a production benefit while that dwarf performs a compatible local job.
+As a player, I want crafted tools to have a meaningful use. I should be able to equip an available tool to a dwanarf, see who owns it, and receive a production benefit while that dwarf performs a compatible local job.
 
 One dwarf may carry at most one tool, and one tool may not be equipped by multiple dwarves. Equipping and returning tools must keep the inventory consistent. For assessment, an equipped tool adds **one additional unit of the dwarf's assigned resource per day**. So, e.g. Woodcutting normal: 3; with tool: 4; Mining normal: 2; with tool: 3. Tools do not need durability in this version.
 

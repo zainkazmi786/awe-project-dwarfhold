@@ -10,7 +10,8 @@ export interface Dwarf {
      icon: string; 
      assignment: JobType; 
      status: DwarfStatus; 
-     specialty?: Exclude<JobType, null> 
+     specialty?: Exclude<JobType, null>;
+     hungry: boolean; // true = not fed at last meal, will not produce next day
 }
 
 export interface ColonyState { 

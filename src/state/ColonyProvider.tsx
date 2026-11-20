@@ -26,6 +26,7 @@ const initialState: ColonyState = {
       assignment: "mining",
       status: "working",
       specialty: "mining",
+      hungry: false,
     },
     {
       id: "dwarf-2",
@@ -35,6 +36,7 @@ const initialState: ColonyState = {
       assignment: "woodcutting",
       status: "working",
       specialty: "woodcutting",
+      hungry: false,
     },
     {
       id: "dwarf-3",
@@ -43,6 +45,7 @@ const initialState: ColonyState = {
       icon: "🧔🏽",
       assignment: null,
       status: "idle",
+      hungry: false,
     },
   ],
 };
@@ -70,11 +73,38 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(timer);
   }, [paused]);
 
+  // D1: after each day's meal, report dwarves who went hungry.
+  // Done in an effect (not inside advanceDay / the setColony updater) so the
+  // message is logged once per day even if React re-runs state updaters.
+  useEffect(() => {
+    const hungry = colony.dwarves.filter((dwarf) => dwarf.hungry);
+    if (hungry.length === 0) return;
+
+    setActivities((current) =>
+      [
+        {
+          id: crypto.randomUUID(),
+          day: colony.day,
+          message: `Not enough food — ${hungry
+            .map((dwarf) => dwarf.name)
+            .join(", ")} went hungry and will not work tomorrow.`,
+          tone: "warning" as const,
+        },
+        ...current,
+      ].slice(0, 6),
+    );
+  }, [colony.day]); // intentionally only on day change
+
   function assignDwarf(id: string, assignment: JobType) {
+    // D1: a dwarf on an expedition cannot take a second activity.
+    if (colony.dwarves.find((item) => item.id === id)?.status === "expedition") {
+      return;
+    }
+
     setColony((current) => ({
       ...current,
       dwarves: current.dwarves.map((dwarf) =>
-        dwarf.id === id
+        dwarf.id === id && dwarf.status !== "expedition"
           ? {
               ...dwarf,
               assignment,

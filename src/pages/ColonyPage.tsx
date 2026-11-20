@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Chronicle } from "../components/Chronicle";
 import { DwarfRoster } from "../components/DwarfRoster";
-import { jobLabel, production } from "../simulation";
+import { eatsColonyFood, isProducing, jobLabel, production } from "../simulation";
 import { useColony } from "../state/ColonyContext";
 import type { ResourceKey } from "../types";
 
@@ -16,10 +16,11 @@ export function ColonyPage() {
   const [destination, setDestination] = useState("crystal-cave");
   const [expeditionDwarf, setExpeditionDwarf] = useState("dwarf-3");
 
+  // Same rules as advanceDay: only producing dwarves count, only present dwarves eat.
   const dailyOutput = colony.dwarves.reduce<Record<ResourceKey, number>>(
     (total, dwarf) => {
-      if (dwarf.assignment) {
-        const output = production[dwarf.assignment];
+      if (isProducing(dwarf)) {
+        const output = production[dwarf.assignment!];
         Object.entries(output).forEach(([resource, amount]) => {
           total[resource as ResourceKey] += amount ?? 0;
         });
@@ -29,7 +30,7 @@ export function ColonyPage() {
     {
       wood: 0,
       stone: 0,
-      food: -colony.dwarves.length,
+      food: -colony.dwarves.filter(eatsColonyFood).length,
       tools: 0,
     },
   );
@@ -79,6 +80,11 @@ export function ColonyPage() {
               {dailyOutput.food}
             </strong>
           </div>
+          <p className="food-rule">
+            Each dwarf at home eats 1 ration at the end of the day, in roster
+            order. Dwarves on expedition forage for themselves. A dwarf who
+            gets no ration goes hungry and produces nothing the next day.
+          </p>
         </section>
       </section>
 

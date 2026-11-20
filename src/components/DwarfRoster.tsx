@@ -71,7 +71,17 @@ export function DwarfRoster({ dwarves, onAssign }: Props) {
                 </select>
               </div>
 
-              <span className="status">{dwarf.status}</span>
+              <span className="status">
+                {dwarf.status}
+                {dwarf.hungry && (
+                  <em
+                    className="hungry"
+                    title="Not fed at the last meal — produces nothing until fed."
+                  >
+                    🍽️ hungry
+                  </em>
+                )}
+              </span>
             </article>
           );
         })}
