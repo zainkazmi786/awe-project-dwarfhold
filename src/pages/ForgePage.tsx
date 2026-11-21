@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Chronicle } from "../components/Chronicle";
-import { canCraft, recipes } from "../simulation";
+import {
+  canCraft,
+  canForge,
+  craftDaysFor,
+  recipes,
+  speciesTraits,
+} from "../simulation";
 import { useColony } from "../state/ColonyContext";
 import type { Recipe } from "../types";
 
@@ -28,6 +34,7 @@ export function ForgePage() {
   const smithId = smiths.some((dwarf) => dwarf.id === picked)
     ? picked
     : (smiths[0]?.id ?? "");
+  const smith = colony.dwarves.find((dwarf) => dwarf.id === smithId);
 
   return (
     <div className="forge-layout">
@@ -64,18 +71,28 @@ export function ForgePage() {
             </select>
           </label>
           <p>
-            Only fed dwarves assigned to the Ember Forge can craft, one order
-            each. Materials are paid at the start. Orders are saved and
+            Only fed characters assigned to the Ember Forge can craft, one
+            order each. Materials are paid at the start. Working students
+            forge tools in 1 day but cannot forge weapons. Orders are saved and
             continue after a page refresh.
           </p>
         </section>
 
-        {(Object.keys(recipes) as Recipe[]).map((recipe) => (
-          <section className="panel forge" key={recipe}>
+        {(Object.keys(recipes) as Recipe[]).map((recipe) => {
+          // D6: time and permission depend on the selected smith's species
+          const allowed = !smith || canForge(colony, smith.id, recipe);
+          return (
+          <section className={allowed ? "panel forge" : "panel forge locked"} key={recipe}>
             <div>
-              <small>{recipes[recipe].days} DAYS</small>
+              <small>{craftDaysFor(smith, recipe)} DAYS</small>
               <h2>{recipeInfo[recipe].title}</h2>
               <p>{recipeInfo[recipe].text}</p>
+              {!allowed && smith && (
+                <p className="forge-limit">
+                  {smith.name} is a {speciesTraits[smith.species].label} and
+                  cannot forge a {recipe}.
+                </p>
+              )}
             </div>
             <div className="recipe">
               <span>{recipes[recipe].cost.wood} 🪵</span>
@@ -83,12 +100,16 @@ export function ForgePage() {
               <span>{recipes[recipe].cost.stone} 🪨</span>
               <i>→</i>
               <span>1 {recipeInfo[recipe].icon}</span>
-              <button onClick={() => startCraft(smithId, recipe)}>
+              <button
+                disabled={!allowed}
+                onClick={() => startCraft(smithId, recipe)}
+              >
                 Forge {recipe}
               </button>
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       <Chronicle activities={activities} />

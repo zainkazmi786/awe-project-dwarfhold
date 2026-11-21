@@ -3,9 +3,11 @@ export type JobType = "woodcutting" | "mining" | "farming" | "smithing" | null;
 export type DwarfStatus = "idle" | "working" | "expedition";
 export interface Resources { wood: number; stone: number; food: number; tools: number; weapons: number }
 export type Recipe = "tool" | "weapon";
+export type Species = "dwarf" | "working-student"; // D6
 
-export interface Dwarf { 
+export interface Dwarf {
     id: string;
+     species: Species; // D6
      name: string; 
      title: string; 
      icon: string; 
@@ -29,13 +31,22 @@ export interface ColonyState {
     resources: Resources; 
     dwarves: Dwarf[];
     crafting: CraftJob[];
+    recruited: boolean; // D6: the working student has joined (only once)
 }
 
 export interface ExpeditionResult { 
     expeditionId: string; 
     status: "completed"; 
-    rewards: Partial<Resources>; 
-    message: string 
+    rewards: Partial<Resources>;
+    message: string;
+    recruit?: Recruit; // D6: only returned by the university
+}
+
+// D6: who the server says joins the colony
+export interface Recruit {
+    species: Species;
+    name: string;
+    title: string;
 }
 
 export interface Activity { 

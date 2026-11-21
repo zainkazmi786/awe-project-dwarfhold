@@ -1,9 +1,9 @@
-import { recipes } from "../simulation";
+import { recipes, speciesTraits } from "../simulation";
 import type { Activity, ColonyState, CraftJob, Dwarf } from "../types";
 
 /** D5: saved in localStorage under this key. Bump SAVE_VERSION when the state shape changes. */
 export const SAVE_KEY = "dwarfhold-save";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // v2: D6 adds Dwarf.species and ColonyState.recruited
 
 export interface SaveData {
   colony: ColonyState;
@@ -28,6 +28,8 @@ function isDwarf(value: unknown): value is Dwarf {
   return (
     isObject(value) &&
     typeof value.id === "string" &&
+    typeof value.species === "string" &&
+    value.species in speciesTraits &&
     typeof value.name === "string" &&
     typeof value.title === "string" &&
     typeof value.icon === "string" &&
@@ -62,7 +64,7 @@ function isActivity(value: unknown): value is Activity {
 }
 
 export function isColonyState(value: unknown): value is ColonyState {
-  if (!isObject(value) || !isNumber(value.day)) return false;
+  if (!isObject(value) || !isNumber(value.day) || typeof value.recruited !== "boolean") return false;
   const { resources, dwarves, crafting } = value;
   if (!isObject(resources) || !RESOURCE_KEYS.every((key) => isNumber(resources[key]) && resources[key] >= 0)) return false;
   if (!Array.isArray(dwarves) || !dwarves.every(isDwarf)) return false;

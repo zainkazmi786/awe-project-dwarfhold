@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  advanceDay, cancelCraft, departExpedition, equipTool, feedDwarves, returnFromExpedition, returnTool, startCraft,
+  advanceDay, canForge, cancelCraft, departExpedition, equipTool, feedDwarves, returnFromExpedition, returnTool, startCraft,
 } from "./simulation";
 import { parseSave, SAVE_VERSION, serializeSave } from "./state/persistence";
 import type { ColonyState, Dwarf } from "./types";
 
 const dwarf = (overrides: Partial<Dwarf> = {}): Dwarf => ({
-  id: "d1", name: "Brom", title: "", icon: "",
+  id: "d1", species: "dwarf", name: "Brom", title: "", icon: "",
   assignment: "woodcutting", status: "working", hungry: false, hasTool: false,
   ...overrides,
 });
@@ -16,6 +16,7 @@ const colony = (dwarves: Dwarf[], food = 5): ColonyState => ({
   resources: { wood: 0, stone: 0, food, tools: 0, weapons: 0 },
   dwarves,
   crafting: [],
+  recruited: false,
 });
 
 describe("colony simulation", () => {
@@ -254,5 +255,92 @@ describe("D5: save and restore", () => {
       expect(parseSave(JSON.stringify({ version: SAVE_VERSION, colony: state, activities: [] })))
         .toEqual({ status: "invalid", reason: "corrupt" }),
     );
+  });
+});
+
+describe("D6: the working student", () => {
+  const recruit = { species: "working-student" as const, name: "Mira", title: "Working Student" };
+  const student = (overrides: Partial<Dwarf> = {}) =>
+    dwarf({ id: "working-student-1", species: "working-student", ...overrides });
+
+  it("joins after a successful university trip, idle and fed", () => {
+    const away = departExpedition(colony([dwarf()]), "d1", "university");
+    const back = returnFromExpedition(away, "d1", { food: 2 }, recruit);
+    expect(back.recruited).toBe(true);
+    expect(back.dwarves).toHaveLength(2);
+    expect(back.dwarves[1]).toMatchObject({
+      id: "working-student-1", species: "working-student", name: "Mira", icon: "🎓",
+      status: "idle", assignment: null, hungry: false, hasTool: false,
+    });
+  });
+
+  it("joins only once", () => {
+    const first = returnFromExpedition(departExpedition(colony([dwarf()]), "d1", "university"), "d1", {}, recruit);
+    const second = returnFromExpedition(departExpedition(first, "d1", "university"), "d1", {}, recruit);
+    expect(second.dwarves.filter((d) => d.species === "working-student")).toHaveLength(1);
+  });
+
+  it("does not join on a failed trip or without a recruit from the server", () => {
+    const away = departExpedition(colony([dwarf()]), "d1", "university");
+    const failed = returnFromExpedition(away, "d1");
+    expect(failed.recruited).toBe(false);
+    expect(failed.dwarves).toHaveLength(1);
+  });
+
+  it("ignores an unknown species from the server", () => {
+    const away = departExpedition(colony([dwarf()]), "d1", "university");
+    const back = returnFromExpedition(away, "d1", {}, { ...recruit, species: "dragon" as never });
+    expect(back.dwarves).toHaveLength(1);
+    expect(back.recruited).toBe(false);
+  });
+
+  it("eats 2 rations", () => {
+    const next = advanceDay(colony([student({ status: "idle", assignment: null })], 5));
+    expect(next.resources.food).toBe(3);
+    expect(next.dwarves[0].hungry).toBe(false);
+  });
+
+  it("takes nothing and goes hungry when less than 2 rations are left; food stays for the next in line", () => {
+    const { dwarves, food } = feedDwarves([student(), dwarf({ id: "d2" })], 1);
+    expect(dwarves.map((d) => d.hungry)).toEqual([true, false]);
+    expect(food).toBe(0);
+  });
+
+  it("has its own production table (+1 tool bonus still applies)", () => {
+    const at = (job: Dwarf["assignment"], hasTool = false) =>
+      advanceDay(colony([student({ assignment: job, hasTool })], 10)).resources;
+    expect(at("woodcutting").wood).toBe(2);
+    expect(at("mining").stone).toBe(1);
+    expect(at("farming").food).toBe(10 + 5 - 2);
+    expect(at("woodcutting", true).wood).toBe(3);
+  });
+
+  it("forges a tool in 1 day", () => {
+    const start = withStock([student({ assignment: "smithing" })], { wood: 9, stone: 9, food: 9 });
+    const started = startCraft(start, "working-student-1", "tool");
+    expect(started.crafting[0].readyDay).toBe(2);
+    expect(advanceDay(started).resources.tools).toBe(1);
+  });
+
+  it("cannot forge a weapon (state unchanged)", () => {
+    const start = withStock([student({ assignment: "smithing" })], { wood: 9, stone: 9, food: 9 });
+    expect(canForge(start, "working-student-1", "weapon")).toBe(false);
+    expect(startCraft(start, "working-student-1", "weapon")).toBe(start);
+  });
+
+  it("can go on expeditions like everyone else", () => {
+    const away = departExpedition(colony([student()]), "working-student-1", "old-mine");
+    expect(away.dwarves[0].status).toBe("expedition");
+  });
+
+  it("is saved and restored", () => {
+    const state = { ...colony([dwarf(), student()]), recruited: true };
+    const result = parseSave(serializeSave({ colony: state, activities: [] }));
+    expect(result).toEqual({ status: "ok", data: { colony: state, activities: [] } });
+  });
+
+  it("rejects a version 1 save (no species) as incompatible", () => {
+    const raw = JSON.stringify({ version: 1, colony: colony([dwarf()]), activities: [] });
+    expect(parseSave(raw)).toEqual({ status: "invalid", reason: "incompatible" });
   });
 });

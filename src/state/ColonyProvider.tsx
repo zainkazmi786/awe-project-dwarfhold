@@ -5,7 +5,9 @@ import {
   canAfford,
   canCraft,
   canExplore,
+  canForge,
   cancelCraft,
+  craftDaysFor,
   departExpedition,
   equipTool,
   finishedJobs,
@@ -14,6 +16,7 @@ import {
   recipes,
   returnFromExpedition,
   returnTool,
+  speciesTraits,
   startCraft,
 } from "../simulation";
 import type { Activity, ColonyState, JobType, Recipe } from "../types";
@@ -32,6 +35,7 @@ const initialState: ColonyState = {
   dwarves: [
     {
       id: "dwarf-1",
+      species: "dwarf",
       name: "Bromli Copperkeg",
       title: "Hold Warden",
       icon: "🧔🏻",
@@ -43,6 +47,7 @@ const initialState: ColonyState = {
     },
     {
       id: "dwarf-2",
+      species: "dwarf",
       name: "Yrsa Flintbraid",
       title: "Trail Scout",
       icon: "🧔🏼‍♀️",
@@ -54,6 +59,7 @@ const initialState: ColonyState = {
     },
     {
       id: "dwarf-3",
+      species: "dwarf",
       name: "Dori Ashmantle",
       title: "Stone Singer",
       icon: "🧔🏽",
@@ -64,6 +70,7 @@ const initialState: ColonyState = {
     },
   ],
   crafting: [],
+  recruited: false,
 };
 
 const welcome: Activity = {
@@ -205,6 +212,21 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     openOrders.current = colony.crafting;
   }, [colony.crafting]);
 
+  // D6: announce the new resident once, when `recruited` flips to true.
+  // Starts from the loaded value, so a restored colony doesn't announce again.
+  const wasRecruited = useRef(colony.recruited);
+  useEffect(() => {
+    if (wasRecruited.current || !colony.recruited) return;
+    wasRecruited.current = true;
+    const student = colony.dwarves.find((dwarf) => dwarf.species !== "dwarf");
+    if (student) {
+      addActivity(
+        `${student.name} the ${speciesTraits[student.species].label} joined Stonehome!`,
+        "good",
+      );
+    }
+  }, [colony.recruited]);
+
   function assignDwarf(id: string, assignment: JobType) {
     // D1: a dwarf on an expedition cannot take a second activity.
     if (
@@ -267,13 +289,21 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
       addActivity("Choose a free, fed dwarf working at the forge.", "warning");
       return;
     }
+    // D6: species limitation (working students cannot forge weapons)
+    if (!canForge(colony, dwarfId, recipe)) {
+      addActivity(
+        `${smith.name} cannot forge a ${recipe} (${speciesTraits[smith.species].label}).`,
+        "warning",
+      );
+      return;
+    }
     if (!canAfford(colony.resources, recipes[recipe].cost)) {
       addActivity(`Not enough materials to forge a ${recipe}.`, "warning");
       return;
     }
     setColony((current) => startCraft(current, dwarfId, recipe));
     addActivity(
-      `${smith.name} started a ${recipe}, ready on day ${colony.day + recipes[recipe].days}.`,
+      `${smith.name} started a ${recipe}, ready on day ${colony.day + craftDaysFor(smith, recipe)}.`,
     );
   }
 
@@ -307,7 +337,7 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     try {
       const result = await beginExpedition(dwarfId, destination);
       setColony((current) =>
-        returnFromExpedition(current, dwarfId, result.rewards),
+        returnFromExpedition(current, dwarfId, result.rewards, result.recruit),
       );
       addActivity(result.message, "good");
     } catch (error) {

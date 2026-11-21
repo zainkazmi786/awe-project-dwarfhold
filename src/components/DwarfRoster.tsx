@@ -1,4 +1,4 @@
-import { jobLabel } from "../simulation";
+import { jobLabel, speciesTraits } from "../simulation";
 import type { CraftJob, Dwarf, JobType } from "../types";
 
 const jobs: Exclude<JobType, null>[] = [
@@ -50,17 +50,29 @@ export function DwarfRoster({
             : "Generalist";
 
           return (
-            <article className={isAway ? "dwarf away" : "dwarf"} key={dwarf.id}>
+            <article
+              className={`dwarf species-${dwarf.species}${isAway ? " away" : ""}`}
+              key={dwarf.id}
+            >
               <div className="portrait">
                 {dwarf.icon}
                 <i className={dwarf.status} />
               </div>
 
               <div className="dwarf-details">
-                <h3>{dwarf.name}</h3>
+                <h3>
+                  {dwarf.name}
+                  {dwarf.species !== "dwarf" && (
+                    <em className="species-badge">
+                      {speciesTraits[dwarf.species].label}
+                    </em>
+                  )}
+                </h3>
                 <p>
                   {dwarf.title} · {specialty}
                 </p>
+                {/* D6: traits visible so the player can choose job and recipe */}
+                <p className="traits">{speciesTraits[dwarf.species].summary}</p>
 
                 <select
                   value={dwarf.assignment ?? ""}

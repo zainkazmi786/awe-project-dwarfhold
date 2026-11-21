@@ -165,3 +165,61 @@
 - A dwarf saved as away **without** a destination is not handled (deliberately left out for now). They would stay away.
 - Days only pass while the tab is open; there is no offline progress. A partly elapsed day (< 8 s) restarts after a refresh.
 - No "New colony" button. To reset, clear `dwarfhold-save` in the browser's devtools.
+
+## 2026-11-21 — D6: A new species joins Stonehome
+
+### Decisions
+| Decision | Choice | Reason |
+|---|---|---|
+| Species | **Working Student** (`"working-student"`), icon 🎓, joins as *Mira Nightshift* | Team choice. Story: always exhausted. |
+| Recruit destination | **The University** (`university`) | Chosen by the team. The UI shows a rumour hint when it's selected. |
+| Who decides recruitment | **Both.** The client chooses the university; the server returns `recruit` (species, name, title). The client adds the character only if `recruited === false`. | The server is stateless, so "only once" must be guarded where the state is saved (client, D5). |
+| Appetite | **2 rations** per day ("always exhausted") | Gameplay difference: costs more food |
+| Partial food | All-or-nothing: with fewer than 2 rations left the student eats nothing, goes hungry, and the food stays for the next in line | Deterministic, no negative food |
+| Production | Wood **+2**, Stone **+1**, Food **+5** (dwarf: 3 / 2 / 4) | Too tired for heavy labour, but a part-time canteen-garden job makes them the best farmer. Net food when farming is +3, the same as a dwarf. |
+| Crafting ability | Forges **tools in 1 day** (dwarf: 2) | Engineering lectures |
+| Crafting limitation | **Cannot forge weapons** | No time (or will) for weapons |
+| Tools | Can equip one; the +1 bonus applies | Same rules as everyone (D2 requirement) |
+| Expeditions | Can go | Same rules as everyone |
+| Starting state | Idle, unassigned, fed, no tool | Player decides the job |
+| Old saves (v1) | `SAVE_VERSION` 1 → 2; v1 saves are "incompatible" and start a new colony | Simpler than a migration |
+| Rename `Dwarf` → `Character` | Not done | Large mechanical change with no gameplay value; `species` on `Dwarf` is enough |
+
+### Interface changes (`src/types.ts`)
+- `Species = "dwarf" | "working-student"`
+- `Dwarf.species: Species`
+- `ColonyState.recruited: boolean`
+- `ExpeditionResult.recruit?: Recruit` and the new `Recruit { species, name, title }`
+
+### Code changes
+| File | Change |
+|---|---|
+| `src/simulation.ts` | New `SpeciesTraits` and the `speciesTraits` table (label, icon, appetite, production, craftable, craftDays, summary). `production` is now `speciesTraits.dwarf.production`. `feedDwarves` uses appetite with all-or-nothing. `dailyOutput` uses the species table. New `canForge(state, id, recipe)` and `craftDaysFor(dwarf, recipe)`. `startCraft` checks `canForge` and uses the species days. New `createRecruit()`. `returnFromExpedition(..., recruit?)` adds the recruit in the same update, only if `!recruited` and the species is known. |
+| `server/index.js` | New `university` outcome: `{ food: 2 }` plus `recruit` |
+| `src/state/ColonyProvider.tsx` | `species: "dwarf"` and `recruited: false` in `initialState`. `runTrip` passes `result.recruit`. An effect announces "… joined Stonehome!" once, when `recruited` flips to true, starting from the loaded value so it doesn't repeat after a refresh. `beginCraft` warns when the species can't forge the recipe and shows the species craft time. |
+| `src/state/persistence.ts` | `SAVE_VERSION = 2`. Validates `species` and `recruited`. |
+| `src/components/DwarfRoster.tsx` | Species badge, blue portrait (`species-working-student`), and a traits line on every card |
+| `src/pages/ColonyPage.tsx` | "The University 🎓" option with a rumour or "already joined" hint. Job cards show 🎓 numbers after recruitment. The food forecast sums appetites. Updated meal rule text. |
+| `src/pages/ForgePage.tsx` | Days label per selected smith. A recipe the smith can't make is greyed out and disabled, with the reason shown. Updated rule text. |
+| `src/styles.css` | Badge, portrait, traits, hint and locked recipe styles |
+| `docs/API.md` | `university` response documented |
+| `src/simulation.test.ts` | Helpers get `species` and `recruited`. 12 D6 tests added. |
+
+### Tests (`npm test`, 44/44 passing)
+- joins after a successful university trip (idle, fed, no tool, 🎓)
+- joins only once (second university trip adds nobody)
+- no join on a failed trip
+- unknown species from the server is ignored
+- eats 2; with only 1 left eats nothing, goes hungry and leaves the ration for the next dwarf
+- production 2 / 1 / 5, tool bonus +1
+- tool ready after 1 day
+- weapon refused with unchanged state
+- can go on expeditions
+- saved and restored with the student
+- v1 save gives `incompatible`
+- Manual server check: `POST /api/expeditions {destination:"university"}` returns `recruit`. With `?fail=true` it returns 503 and no recruit.
+
+### Known limitations
+- Not clicked through in the browser yet.
+- The recruit's id is fixed (`working-student-1`). That's fine because they join only once.
+- Job cards on the Colony page show only dwarf and student numbers. A third species would need a generic list.

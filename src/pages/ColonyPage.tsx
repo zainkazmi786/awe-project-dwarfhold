@@ -7,6 +7,7 @@ import {
   eatsColonyFood,
   jobLabel,
   production,
+  speciesTraits,
 } from "../simulation";
 import { useColony } from "../state/ColonyContext";
 import type { ResourceKey } from "../types";
@@ -35,7 +36,10 @@ export function ColonyPage() {
     {
       wood: 0,
       stone: 0,
-      food: -colony.dwarves.filter(eatsColonyFood).length,
+      // D6: appetite per species
+      food: -colony.dwarves
+        .filter(eatsColonyFood)
+        .reduce((sum, dwarf) => sum + speciesTraits[dwarf.species].appetite, 0),
       tools: 0,
       weapons: 0,
     },
@@ -80,7 +84,19 @@ export function ColonyPage() {
                   }{" "}
                   assigned
                 </p>
-                <strong>+{Object.values(production[job])[0]} / day</strong>
+                <strong>
+                  🧔 +{Object.values(production[job])[0]} / day
+                  {colony.recruited && (
+                    <>
+                      {" · 🎓 +"}
+                      {
+                        Object.values(
+                          speciesTraits["working-student"].production[job],
+                        )[0]
+                      }
+                    </>
+                  )}
+                </strong>
               </article>
             ))}
           </div>
@@ -93,9 +109,10 @@ export function ColonyPage() {
             </strong>
           </div>
           <p className="food-rule">
-            Each dwarf at home eats 1 ration at the end of the day, in roster
-            order. Dwarves on expedition forage for themselves. A dwarf who gets
-            no ration goes hungry and produces nothing the next day.
+            At the end of the day everyone at home eats, in roster order: a
+            dwarf eats 1 ration, a working student 2. Anyone who can't get
+            their full meal eats nothing, goes hungry and produces nothing the
+            next day. Travellers forage for themselves.
           </p>
           <p className="food-rule">
             An equipped tool adds +1 of the dwarf's resource per day while they
@@ -142,8 +159,16 @@ export function ColonyPage() {
               <option value="crystal-cave">Crystal Cave</option>
               <option value="old-mine">The Old Mine</option>
               <option value="blocked-pass">Blocked Pass</option>
+              <option value="university">The University 🎓</option>
             </select>
           </label>
+          {destination === "university" && (
+            <p className="recruit-hint">
+              {colony.recruited
+                ? "The working student already lives in Stonehome. Nobody else will join."
+                : "Rumour says an exhausted working student at the university needs a home. The first successful trip brings them to Stonehome."}
+            </p>
+          )}
 
           <button
             disabled={expeditionPending}

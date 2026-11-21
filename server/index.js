@@ -8,6 +8,12 @@ let expeditionNumber = 16;
 const outcomes = {
   "crystal-cave": { rewards: { stone: 8, tools: 1 }, message: "The scout found a crystal seam and an abandoned mason's tool." },
   "old-mine": { rewards: { stone: 12, wood: 2 }, message: "The old mine still holds good stone and usable supports." },
+  // D6: the university always offers a recruit; the client accepts only the first one
+  university: {
+    rewards: { food: 2 },
+    message: "At the university gates the scout met an exhausted working student looking for a place to sleep.",
+    recruit: { species: "working-student", name: "Mira Nightshift", title: "Working Student" },
+  },
 };
 
 app.use(cors()); app.use(express.json());
