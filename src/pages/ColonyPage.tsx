@@ -45,6 +45,7 @@ export function ColonyPage() {
       <DwarfRoster
         dwarves={colony.dwarves}
         toolsInStorage={colony.resources.tools}
+        crafting={colony.crafting}
         onAssign={assignDwarf}
         onEquip={equipTool}
         onReturn={returnTool}

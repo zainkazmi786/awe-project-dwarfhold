@@ -8,3 +8,11 @@
 .tool-btn{margin-top:6px;width:100%;border:1px solid #6b5232;background:#2a2016;color:#e0c89a;padding:4px;font:600 11px Barlow Condensed;text-transform:uppercase;cursor:pointer}
 .tool-btn:disabled{opacity:.45;cursor:not-allowed}
 .recipe-stack{display:flex;flex-direction:column;gap:15px}
+
+.forge-orders{display:flex;flex-direction:column;gap:8px;padding:17px}
+.forge-orders p{font:12px Barlow Condensed;color:#927b60;margin:0}
+.forge-orders .order{display:flex;align-items:center;gap:12px;padding:8px;background:#211b14;border:1px solid #463824;font:600 13px Barlow Condensed}
+.forge-orders .order b{margin-left:auto;color:#d9a34f}
+.forge-orders .order button{background:transparent;color:#d87f63;border:1px solid #6b3f30;padding:4px 9px;cursor:pointer}
+.forge-orders label{font:600 10px Barlow Condensed;letter-spacing:.1em;color:#9e8566}
+.forge-orders select{display:block;width:100%;margin-top:5px;background:#100e0b;color:#d8c8ae;border:1px solid #4d3f30;padding:5px}

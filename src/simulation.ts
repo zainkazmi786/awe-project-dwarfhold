@@ -1,14 +1,14 @@
-import type { ColonyState, Dwarf, JobType, Recipe, Resources } from "./types";
+import type { ColonyState, CraftJob, Dwarf, JobType, Recipe, Resources } from "./types";
 
 export const production: Record<Exclude<JobType, null>, Partial<Resources>> = {
-  woodcutting: { wood: 3 }, mining: { stone: 2 }, farming: { food: 4 },
+  woodcutting: { wood: 3 }, mining: { stone: 2 }, farming: { food: 4 }, smithing: {},
 };
 
 export const TOOL_BONUS = 1;
 
-export const recipes: Record<Recipe, { cost: Partial<Resources>; output: keyof Resources }> = {
-  tool: { cost: { wood: 3, stone: 2 }, output: "tools" },
-  weapon: { cost: { wood: 3, stone: 3 }, output: "weapons" },
+export const recipes: Record<Recipe, { cost: Partial<Resources>; output: keyof Resources; days: number }> = {
+  tool: { cost: { wood: 3, stone: 2 }, output: "tools", days: 2 },
+  weapon: { cost: { wood: 3, stone: 3 }, output: "weapons", days: 3 },
 };
 
 /** A dwarf produces only when present, assigned, working and not hungry. */
@@ -60,7 +60,14 @@ export function advanceDay(state: ColonyState): ColonyState {
   const { dwarves, food } = feedDwarves(state.dwarves, resources.food);
   resources.food = food;
 
-  return { ...state, day: state.day + 1, resources, dwarves };
+  // 3. D3: finished forge orders go into storage
+  const day = state.day + 1;
+  finishedJobs(state.crafting, day).forEach((job) => {
+    resources[recipes[job.recipe].output] += 1;
+  });
+  const crafting = state.crafting.filter((job) => job.readyDay > day);
+
+  return { ...state, day, resources, dwarves, crafting };
 }
 
 /** D2: takes one tool from storage. Returns the same state if not allowed. */
@@ -88,20 +95,43 @@ export function returnTool(state: ColonyState, id: string): ColonyState {
 export const canAfford = (resources: Resources, cost: Partial<Resources>): boolean =>
   Object.entries(cost).every(([resource, amount]) => resources[resource as keyof Resources] >= (amount ?? 0));
 
-/** Pays the recipe cost and adds the result. Returns the same state if materials are missing. */
-export function craft(state: ColonyState, recipe: Recipe): ColonyState {
-  const { cost, output } = recipes[recipe];
-  if (!canAfford(state.resources, cost)) return state;
+export const finishedJobs = (jobs: CraftJob[], day: number): CraftJob[] =>
+  jobs.filter((job) => job.readyDay <= day);
+
+export const isCrafting = (state: ColonyState, id: string): boolean =>
+  state.crafting.some((job) => job.dwarfId === id);
+
+/** D3: a smith at home, fed and without an open order. */
+export function canCraft(state: ColonyState, id: string): boolean {
+  const dwarf = state.dwarves.find((item) => item.id === id);
+  return !!dwarf && dwarf.status === "working" && dwarf.assignment === "smithing" && !dwarf.hungry && !isCrafting(state, id);
+}
+
+/** D3: pays the cost now, the item arrives after `days`. Returns the same state if not allowed. */
+export function startCraft(state: ColonyState, id: string, recipe: Recipe): ColonyState {
+  const { cost, days } = recipes[recipe];
+  if (!canCraft(state, id) || !canAfford(state.resources, cost)) return state;
   const resources = { ...state.resources };
   Object.entries(cost).forEach(([resource, amount]) => {
     resources[resource as keyof Resources] -= amount ?? 0;
   });
-  resources[output] += 1;
-  return { ...state, resources };
+  return { ...state, resources, crafting: [...state.crafting, { dwarfId: id, recipe, readyDay: state.day + days }] };
+}
+
+/** D3: full refund and the smith is free again. */
+export function cancelCraft(state: ColonyState, id: string): ColonyState {
+  const job = state.crafting.find((item) => item.dwarfId === id);
+  if (!job) return state;
+  const resources = { ...state.resources };
+  Object.entries(recipes[job.recipe].cost).forEach(([resource, amount]) => {
+    resources[resource as keyof Resources] += amount ?? 0;
+  });
+  return { ...state, resources, crafting: state.crafting.filter((item) => item !== job) };
 }
 
 export const jobLabel = (job: JobType) => job ? ({
   woodcutting: "Woodcutting",
   mining: "Deep Mining",
-  farming: "Mushroom Farm"
+  farming: "Mushroom Farm",
+  smithing: "Ember Forge"
 }[job]) : "Unassigned";

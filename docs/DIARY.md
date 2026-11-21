@@ -72,3 +72,26 @@
 - equip / return moves the tool between storage and dwarf; second tool, empty storage and travelling dwarf are refused
 - total tools (storage + equipped) stays constant
 - weapon costs 3 wood + 3 stone; missing materials change nothing
+
+## 2026-11-21 — D3: Crafting as colony work
+
+### Decisions
+| Decision | Choice |
+|---|---|
+| Who can craft | A dwarf assigned to the new job `smithing` (Ember Forge), at home, not hungry, with no open order |
+| Duration | Tool 2 days, weapon 3 days (`recipes[...].days`). Started on day N → item in storage on day N + days |
+| Payment | Full cost paid at the start. Invalid attempt (no free smith or missing materials) changes nothing and logs a warning |
+| While crafting | Smith produces no resources, can't be reassigned or sent on an expedition |
+| Cancel | Full refund, smith is free again |
+
+### Code changes
+- `src/types.ts`: job `smithing`, new `CraftJob { dwarfId, recipe, readyDay }`, `ColonyState.crafting`.
+- `src/simulation.ts`: instant `craft` replaced by pure `canCraft`, `startCraft`, `cancelCraft`. `advanceDay` moves finished orders into storage (step 3).
+- `src/state/ColonyProvider.tsx`: `startCraft` / `cancelCraft` actions with warnings; reassigning and expeditions are blocked for a busy smith; a day-change effect logs "finished forging".
+- UI: "Forging now" panel on `ForgePage.tsx` (smith, item, "ready on day X", Cancel, smith select with free smiths only), "🔥 tool · day X" badge and locked job select in `DwarfRoster.tsx`.
+
+### Tests (`npm test`, 21/21 passing)
+- tool: cost paid at start, nothing on day 2, tool in storage on day 3
+- weapon arrives after exactly 3 days
+- non-smith, hungry, travelling, unknown and busy dwarves are refused with unchanged state
+- cancel restores resources exactly; a working smith with a tool produces nothing

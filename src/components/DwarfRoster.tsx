@@ -1,11 +1,17 @@
 import { jobLabel } from "../simulation";
-import type { Dwarf, JobType } from "../types";
+import type { CraftJob, Dwarf, JobType } from "../types";
 
-const jobs: Exclude<JobType, null>[] = ["woodcutting", "mining", "farming"];
+const jobs: Exclude<JobType, null>[] = [
+  "woodcutting",
+  "mining",
+  "farming",
+  "smithing",
+];
 
 interface Props {
   dwarves: Dwarf[];
   toolsInStorage: number;
+  crafting: CraftJob[];
   onAssign: (id: string, job: JobType) => void;
   onEquip: (id: string) => void;
   onReturn: (id: string) => void;
@@ -14,6 +20,7 @@ interface Props {
 export function DwarfRoster({
   dwarves,
   toolsInStorage,
+  crafting,
   onAssign,
   onEquip,
   onReturn,
@@ -37,6 +44,7 @@ export function DwarfRoster({
       <div className="dwarf-list">
         {dwarves.map((dwarf) => {
           const isAway = dwarf.status === "expedition";
+          const order = crafting.find((job) => job.dwarfId === dwarf.id);
           const specialty = dwarf.specialty
             ? `Skilled in ${jobLabel(dwarf.specialty)}`
             : "Generalist";
@@ -56,7 +64,7 @@ export function DwarfRoster({
 
                 <select
                   value={dwarf.assignment ?? ""}
-                  disabled={isAway}
+                  disabled={isAway || !!order}
                   onChange={(event) =>
                     onAssign(dwarf.id, (event.target.value || null) as JobType)
                   }
@@ -94,6 +102,11 @@ export function DwarfRoster({
               <span className="status">
                 {dwarf.status}
                 {dwarf.hasTool && <em className="tool">⚒️ equipped</em>}
+                {order && (
+                  <em className="tool">
+                    🔥 {order.recipe} · day {order.readyDay}
+                  </em>
+                )}
                 {dwarf.hungry && (
                   <em
                     className="hungry"

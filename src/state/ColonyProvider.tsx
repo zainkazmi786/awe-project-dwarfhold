@@ -1,13 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { beginExpedition } from "../api";
 import {
   advanceDay,
   canAfford,
-  craft,
+  canCraft,
+  cancelCraft,
   equipTool,
+  finishedJobs,
+  isCrafting,
   jobLabel,
   recipes,
   returnTool,
+  startCraft,
 } from "../simulation";
 import type {
   Activity,
@@ -61,6 +65,7 @@ const initialState: ColonyState = {
       hasTool: false,
     },
   ],
+  crafting: [],
 };
 
 export function ColonyProvider({ children }: { children: ReactNode }) {
@@ -117,11 +122,28 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     );
   }, [colony.day]); // intentionally only on day change
 
+  // D3: log finished orders. The ref holds the orders from before the day change.
+  const openOrders = useRef(colony.crafting);
+  useEffect(() => {
+    finishedJobs(openOrders.current, colony.day).forEach((job) => {
+      const smith = colony.dwarves.find((item) => item.id === job.dwarfId);
+      addActivity(`${smith?.name} finished forging a ${job.recipe}.`, "good");
+    });
+  }, [colony.day]);
+  useEffect(() => {
+    openOrders.current = colony.crafting;
+  }, [colony.crafting]);
+
   function assignDwarf(id: string, assignment: JobType) {
     // D1: a dwarf on an expedition cannot take a second activity.
     if (
       colony.dwarves.find((item) => item.id === id)?.status === "expedition"
     ) {
+      return;
+    }
+    // D3: a smith stays at the forge until the order is done or cancelled.
+    if (isCrafting(colony, id)) {
+      addActivity("Finish or cancel the forge order first.", "warning");
       return;
     }
 
@@ -168,23 +190,36 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     addActivity(`${dwarf.name} returned a tool to storage.`);
   }
 
-  function craftItem(recipe: Recipe) {
+  function beginCraft(dwarfId: string, recipe: Recipe) {
+    const smith = colony.dwarves.find((item) => item.id === dwarfId);
+    if (!smith || !canCraft(colony, dwarfId)) {
+      addActivity("Choose a free, fed dwarf working at the forge.", "warning");
+      return;
+    }
     if (!canAfford(colony.resources, recipes[recipe].cost)) {
       addActivity(`Not enough materials to forge a ${recipe}.`, "warning");
       return;
     }
-    setColony((current) => craft(current, recipe));
+    setColony((current) => startCraft(current, dwarfId, recipe));
     addActivity(
-      recipe === "tool"
-        ? "A sturdy iron tool joins the stores."
-        : "A new weapon joins the armoury.",
-      "good",
+      `${smith.name} started a ${recipe}, ready on day ${colony.day + recipes[recipe].days}.`,
     );
+  }
+
+  function stopCraft(dwarfId: string) {
+    const smith = colony.dwarves.find((item) => item.id === dwarfId);
+    if (!smith || !isCrafting(colony, dwarfId)) return;
+    setColony((current) => cancelCraft(current, dwarfId));
+    addActivity(`${smith.name} cancelled the order. Materials refunded.`);
   }
 
   async function sendExpedition(dwarfId: string, destination: string) {
     const dwarf = colony.dwarves.find((item) => item.id === dwarfId);
     if (!dwarf) return;
+    if (isCrafting(colony, dwarfId)) {
+      addActivity(`${dwarf.name} is busy at the forge.`, "warning");
+      return;
+    }
 
     setExpeditionPending(true);
     setColony((current) => ({
@@ -263,7 +298,8 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     assignDwarf,
     equipTool: equip,
     returnTool: unequip,
-    craft: craftItem,
+    startCraft: beginCraft,
+    cancelCraft: stopCraft,
     sendExpedition,
   };
 

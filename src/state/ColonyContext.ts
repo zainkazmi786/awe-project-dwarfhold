@@ -10,7 +10,8 @@ export interface ColonyContextValue {
   assignDwarf: (id: string, assignment: JobType) => void;
   equipTool: (id: string) => void;
   returnTool: (id: string) => void;
-  craft: (recipe: Recipe) => void;
+  startCraft: (dwarfId: string, recipe: Recipe) => void;
+  cancelCraft: (dwarfId: string) => void;
   sendExpedition: (dwarfId: string, destination: string) => Promise<void>;
 }
 

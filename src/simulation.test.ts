@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceDay, craft, equipTool, feedDwarves, returnTool } from "./simulation";
+import { advanceDay, cancelCraft, equipTool, feedDwarves, returnTool, startCraft } from "./simulation";
 import type { ColonyState, Dwarf } from "./types";
 
 const dwarf = (overrides: Partial<Dwarf> = {}): Dwarf => ({
@@ -12,6 +12,7 @@ const colony = (dwarves: Dwarf[], food = 5): ColonyState => ({
   day: 1,
   resources: { wood: 0, stone: 0, food, tools: 0, weapons: 0 },
   dwarves,
+  crafting: [],
 });
 
 describe("colony simulation", () => {
@@ -70,11 +71,13 @@ describe("colony simulation", () => {
   });
 });
 
+const withStock = (dwarves: Dwarf[], stock: Partial<ColonyState["resources"]>) => {
+  const state = colony(dwarves);
+  return { ...state, resources: { ...state.resources, ...stock } };
+};
+const smith = (overrides: Partial<Dwarf> = {}) => dwarf({ assignment: "smithing", ...overrides });
+
 describe("D2: tools and weapons", () => {
-  const withStock = (dwarves: Dwarf[], stock: Partial<ColonyState["resources"]>) => {
-    const state = colony(dwarves);
-    return { ...state, resources: { ...state.resources, ...stock } };
-  };
   const totalTools = (state: ColonyState) =>
     state.resources.tools + state.dwarves.filter((d) => d.hasTool).length;
 
@@ -113,13 +116,59 @@ describe("D2: tools and weapons", () => {
   });
 
   it("forges a weapon for 3 wood + 3 stone", () => {
-    const next = craft(withStock([], { wood: 3, stone: 3 }), "weapon");
-    expect(next.resources).toMatchObject({ wood: 0, stone: 0, weapons: 1 });
+    const next = startCraft(withStock([smith()], { wood: 3, stone: 3 }), "d1", "weapon");
+    expect(next.resources).toMatchObject({ wood: 0, stone: 0 });
   });
 
   it("changes nothing when materials are missing (stone never negative)", () => {
-    const state = withStock([], { wood: 10, stone: 1 });
-    expect(craft(state, "tool")).toBe(state);
-    expect(craft(state, "weapon")).toBe(state);
+    const state = withStock([smith()], { wood: 10, stone: 1 });
+    expect(startCraft(state, "d1", "tool")).toBe(state);
+    expect(startCraft(state, "d1", "weapon")).toBe(state);
+  });
+});
+
+describe("D3: crafting takes a smith and time", () => {
+  const stocked = (dwarves: Dwarf[]) => withStock(dwarves, { wood: 20, stone: 20, food: 10 });
+
+  it("pays at the start and delivers a tool after 2 days", () => {
+    const started = startCraft(stocked([smith()]), "d1", "tool");
+    expect(started.resources).toMatchObject({ wood: 17, stone: 18, tools: 0 });
+    expect(started.crafting).toEqual([{ dwarfId: "d1", recipe: "tool", readyDay: 3 }]);
+    const day2 = advanceDay(started);
+    expect(day2.resources.tools).toBe(0);
+    const day3 = advanceDay(day2);
+    expect(day3.resources.tools).toBe(1);
+    expect(day3.crafting).toEqual([]);
+  });
+
+  it("takes 3 days for a weapon", () => {
+    let state = startCraft(stocked([smith()]), "d1", "weapon");
+    state = advanceDay(advanceDay(state));
+    expect(state.resources.weapons).toBe(0);
+    expect(advanceDay(state).resources.weapons).toBe(1);
+  });
+
+  it("refuses non-smiths, hungry, travelling and busy dwarves without changes", () => {
+    const state = stocked([
+      dwarf(),
+      smith({ id: "d2", hungry: true }),
+      smith({ id: "d3", status: "expedition" }),
+    ]);
+    ["d1", "d2", "d3", "nobody"].forEach((id) => expect(startCraft(state, id, "tool")).toBe(state));
+    const busy = startCraft(stocked([smith()]), "d1", "tool");
+    expect(startCraft(busy, "d1", "tool")).toBe(busy);
+  });
+
+  it("cancel refunds everything and frees the smith", () => {
+    const start = stocked([smith()]);
+    const cancelled = cancelCraft(startCraft(start, "d1", "weapon"), "d1");
+    expect(cancelled.resources).toEqual(start.resources);
+    expect(cancelled.crafting).toEqual([]);
+    expect(cancelCraft(start, "d1")).toBe(start);
+  });
+
+  it("a smith produces no resources while crafting", () => {
+    const next = advanceDay(startCraft(stocked([smith({ hasTool: true })]), "d1", "tool"));
+    expect(next.resources).toMatchObject({ wood: 17, stone: 18 });
   });
 });
