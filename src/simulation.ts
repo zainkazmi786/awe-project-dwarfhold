@@ -1,4 +1,4 @@
-import type { ColonyState, CraftJob, Dwarf, JobType, Recipe, Recruit, Resources, Species } from "./types";
+import type { AttackReport, ColonyState, CraftJob, Dwarf, JobType, Recipe, Recruit, Resources, Species } from "./types";
 
 type ProductionTable = Record<Exclude<JobType, null>, Partial<Resources>>;
 
@@ -82,6 +82,7 @@ export function dailyOutput(dwarf: Dwarf): Partial<Resources> {
 }
 
 export function advanceDay(state: ColonyState): ColonyState {
+  if (state.destroyed) return state; // D7: a fallen colony stops
   const resources = { ...state.resources };
 
   // 1. Production (uses hunger from the previous day's meal)
@@ -215,6 +216,7 @@ export function returnFromExpedition(
   id: string,
   rewards: Partial<Resources> = {},
   recruit?: Recruit,
+  attack?: { force: number },
 ): ColonyState {
   const dwarf = state.dwarves.find((item) => item.id === id);
   if (!dwarf || dwarf.status !== "expedition") return state;
@@ -228,12 +230,48 @@ export function returnFromExpedition(
       : item,
   );
   const joins = !!recruit && !state.recruited && recruit.species in speciesTraits;
-  return {
+  const next: ColonyState = {
     ...state,
     resources,
     dwarves: joins ? [...dwarves, createRecruit(recruit!)] : dwarves,
     recruited: state.recruited || joins,
   };
+  // D7: the raid comes after the rewards, so it can take them too
+  return attack ? resolveAttack(next, attack.force) : next;
+}
+
+/** D7: loot order once the weapons are used up. */
+export const LOOT_ORDER: (keyof Resources)[] = ["tools", "stone", "wood", "food"];
+
+/**
+ * D7: each attacker breaks 1 weapon. Attackers left over take 1 item each,
+ * in LOOT_ORDER. Nothing left to take after a lost fight = destroyed.
+ */
+export function resolveAttack(state: ColonyState, force: number): ColonyState {
+  const resources = { ...state.resources };
+  const weaponsUsed = Math.min(resources.weapons, force);
+  resources.weapons -= weaponsUsed;
+  let remaining = force - weaponsUsed;
+  const defended = remaining === 0;
+  const losses: Partial<Resources> = {};
+  LOOT_ORDER.forEach((key) => {
+    const taken = Math.min(resources[key], remaining);
+    if (taken === 0) return;
+    losses[key] = taken;
+    resources[key] -= taken;
+    remaining -= taken;
+  });
+  const destroyed = !defended && LOOT_ORDER.every((key) => resources[key] === 0);
+  const lastAttack: AttackReport = { day: state.day, force, weaponsUsed, losses, defended, destroyed };
+  return { ...state, resources, lastAttack, destroyed: state.destroyed || destroyed };
+}
+
+/** D7: one sentence for the Chronicle and the raid banner. */
+export function attackMessage(attack: AttackReport): string {
+  const losses = Object.entries(attack.losses).map(([resource, amount]) => `${amount} ${resource}`).join(", ");
+  if (attack.defended) return `${attack.force} goblins attacked. Stonehome held! ${attack.weaponsUsed} weapons broke.`;
+  const looted = `${attack.force} goblins attacked. ${attack.weaponsUsed} weapons broke, then they looted ${losses || "nothing"}.`;
+  return attack.destroyed ? `${looted} Stonehome has fallen.` : looted;
 }
 
 export const jobLabel = (job: JobType) => job ? ({

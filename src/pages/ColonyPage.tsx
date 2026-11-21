@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Chronicle } from "../components/Chronicle";
 import { DwarfRoster } from "../components/DwarfRoster";
 import {
+  attackMessage,
   canExplore,
   dailyOutput as outputOf,
   eatsColonyFood,
@@ -110,9 +111,9 @@ export function ColonyPage() {
           </div>
           <p className="food-rule">
             At the end of the day everyone at home eats, in roster order: a
-            dwarf eats 1 ration, a working student 2. Anyone who can't get
-            their full meal eats nothing, goes hungry and produces nothing the
-            next day. Travellers forage for themselves.
+            dwarf eats 1 ration, a working student 2. Anyone who can't get their
+            full meal eats nothing, goes hungry and produces nothing the next
+            day. Travellers forage for themselves.
           </p>
           <p className="food-rule">
             An equipped tool adds +1 of the dwarf's resource per day while they
@@ -122,6 +123,20 @@ export function ColonyPage() {
       </section>
 
       <aside className="side-stack">
+        {colony.lastAttack && (
+          <section
+            className={`panel raid ${colony.lastAttack.defended ? "held" : "lost"}`}
+          >
+            <small>GOBLIN RAID · DAY {colony.lastAttack.day}</small>
+            <h2>
+              {colony.lastAttack.defended
+                ? "Stonehome held"
+                : "Stonehome was looted"}
+            </h2>
+            <p>{attackMessage(colony.lastAttack)}</p>
+          </section>
+        )}
+
         <section className="panel expedition">
           <header>
             <div>
@@ -160,8 +175,17 @@ export function ColonyPage() {
               <option value="old-mine">The Old Mine</option>
               <option value="blocked-pass">Blocked Pass</option>
               <option value="university">The University 🎓</option>
+              <option value="goblin-warrens">Goblin Warrens ⚠️</option>
             </select>
           </label>
+          {destination === "goblin-warrens" && (
+            <p className="raid-hint">
+              Goblins follow a successful scout home. Each attacker breaks 1
+              weapon. If more attackers than weapons arrive, the rest loot
+              tools, then stone, then wood, then food. Nothing left = Stonehome
+              falls. You have {colony.resources.weapons} 🗡️.
+            </p>
+          )}
           {destination === "university" && (
             <p className="recruit-hint">
               {colony.recruited

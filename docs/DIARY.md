@@ -223,3 +223,27 @@
 - Not clicked through in the browser yet.
 - The recruit's id is fixed (`working-student-1`). That's fine because they join only once.
 - Job cards on the Colony page show only dwarf and student numbers. A third species would need a generic list.
+
+## 2026-11-21 — D7: Goblin raid
+
+### Decisions
+| Decision | Choice |
+|---|---|
+| Destination | **Goblin Warrens** (+6 stone). A successful trip brings an attack force of 6 goblins (server `attack.force`) |
+| Defense | Each attacker breaks 1 weapon (weapons are **consumed**). Weapons ≥ force → defended |
+| Loot | Attackers left over take 1 item each: tools in storage → stone → wood → food. Equipped tools are safe |
+| Destroyed | Lost raid that leaves tools, stone, wood and food at 0 → game over: days stop, "Found a new colony" resets |
+| Order | Rewards are added first, so the raid can take them |
+
+### Code changes
+- `server/index.js`: `goblin-warrens` outcome with `attack: { force }` (`ATTACK_FORCE` env var for demos).
+- `src/simulation.ts`: pure `resolveAttack` + `LOOT_ORDER`, called at the end of `returnFromExpedition` only when the server sent `attack` (the `catch` path never does). `advanceDay` stops when `destroyed`.
+- `src/types.ts` / `persistence.ts`: `AttackReport`, `lastAttack`, `destroyed`; `SAVE_VERSION` 3 validates both.
+- UI: raid warning on the destination, "Goblin raid" panel on `ColonyPage.tsx`, Chronicle entry (logged once via a ref), "Stonehome has fallen" screen in `Layout.tsx`.
+
+### Tests (`npm test`, 52/52 passing)
+- weapons > force and weapons = force: defended, weapons reduced by the force
+- 2 weapons vs 6: exact loot order (tools 1, stone 2, wood 1, food untouched)
+- everything at 0: `destroyed`, `advanceDay` returns the same state
+- rewards before the raid; equipped tools kept; failed or second return never attacks
+- raid report survives save/restore, a broken report is rejected

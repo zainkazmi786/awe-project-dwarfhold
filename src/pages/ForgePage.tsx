@@ -21,7 +21,7 @@ const recipeInfo: Record<
   },
   weapon: {
     title: "Craft a weapon",
-    text: "Stored in the armoury to defend Stonehome.",
+    text: "Each weapon stops 1 goblin raider and breaks doing it.",
     icon: "🗡️",
   },
 };

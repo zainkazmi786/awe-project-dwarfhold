@@ -13,6 +13,7 @@ export interface ColonyContextValue {
   startCraft: (dwarfId: string, recipe: Recipe) => void;
   cancelCraft: (dwarfId: string) => void;
   sendExpedition: (dwarfId: string, destination: string) => Promise<void>;
+  restart: () => void;
 }
 
 export const ColonyContext = createContext<ColonyContextValue | null>(null);

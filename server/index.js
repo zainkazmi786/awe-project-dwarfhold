@@ -4,6 +4,8 @@ import express from "express";
 const app = express();
 const port = Number(process.env.PORT ?? 4200);
 let expeditionNumber = 16;
+// D7: size of the goblin raid (env var for demos, like API_LATENCY)
+const attackForce = Math.max(0, Number(process.env.ATTACK_FORCE ?? 6));
 
 const outcomes = {
   "crystal-cave": { rewards: { stone: 8, tools: 1 }, message: "The scout found a crystal seam and an abandoned mason's tool." },
@@ -13,6 +15,11 @@ const outcomes = {
     rewards: { food: 2 },
     message: "At the university gates the scout met an exhausted working student looking for a place to sleep.",
     recruit: { species: "working-student", name: "Mira Nightshift", title: "Working Student" },
+  },
+  "goblin-warrens": {
+    rewards: { stone: 6 },
+    message: "The scout raided the goblin warrens, but goblins followed the tracks home!",
+    attack: { force: attackForce },
   },
 };
 

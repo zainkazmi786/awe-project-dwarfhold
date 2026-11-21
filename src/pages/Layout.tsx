@@ -3,7 +3,7 @@ import { ResourceBar } from "../components/ResourceBar";
 import { useColony } from "../state/ColonyContext";
 
 export function Layout() {
-  const { colony, paused, togglePaused } = useColony();
+  const { colony, paused, togglePaused, restart } = useColony();
 
   return (
     <main>
@@ -27,7 +27,7 @@ export function Layout() {
         <div className="day">
           <small>DEEP DAY</small>
           <strong>{colony.day}</strong>
-          <button onClick={togglePaused}>
+          <button onClick={togglePaused} disabled={colony.destroyed}>
             {paused ? "Wake the hold" : "Pause"}
           </button>
         </div>
@@ -41,7 +41,16 @@ export function Layout() {
       </nav>
 
       <ResourceBar resources={colony.resources} />
-      <Outlet />
+      {colony.destroyed ? (
+        <section className="panel fallen">
+          <small>DAY {colony.day}</small>
+          <h2>Stonehome has fallen</h2>
+          <p>The goblins took everything that was left. The hold is empty.</p>
+          <button onClick={restart}>Found a new colony</button>
+        </section>
+      ) : (
+        <Outlet />
+      )}
 
       <footer>
         <span>🔥 Forge: burning</span>

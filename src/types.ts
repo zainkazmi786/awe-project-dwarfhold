@@ -32,6 +32,18 @@ export interface ColonyState {
     dwarves: Dwarf[];
     crafting: CraftJob[];
     recruited: boolean; // D6: the working student has joined (only once)
+    lastAttack: AttackReport | null; // D7
+    destroyed: boolean; // D7: game over
+}
+
+// D7: result of a goblin raid, shown in the UI
+export interface AttackReport {
+    day: number;
+    force: number;
+    weaponsUsed: number;
+    losses: Partial<Resources>;
+    defended: boolean;
+    destroyed: boolean;
 }
 
 export interface ExpeditionResult { 
@@ -40,6 +52,7 @@ export interface ExpeditionResult {
     rewards: Partial<Resources>;
     message: string;
     recruit?: Recruit; // D6: only returned by the university
+    attack?: { force: number }; // D7: only returned by the goblin warrens
 }
 
 // D6: who the server says joins the colony

@@ -15,3 +15,7 @@ A successful trip to `university` also returns a `recruit` object:
 ```
 
 The server is stateless and returns the recruit on **every** successful university trip. The client accepts it only once (`ColonyState.recruited`), because the colony state lives on the client and is saved there (D5). `?fail=true` returns 503 with no recruit.
+
+## D7: `goblin-warrens` destination
+
+A successful trip returns `rewards: { stone: 6 }` and `attack: { force: 6 }`. The force can be changed for demos with the `ATTACK_FORCE` environment variable (e.g. `ATTACK_FORCE=100 npm run dev`). The client resolves the raid (`resolveAttack`). `?fail=true` returns 503 and no attack.

@@ -17,3 +17,14 @@
 .forge-orders label{font:600 10px Barlow Condensed;letter-spacing:.1em;color:#9e8566}
 .forge-orders select{display:block;width:100%;margin-top:5px;background:#100e0b;color:#d8c8ae;border:1px solid #4d3f30;padding:5px}
 .species-badge{margin-left:7px;font:600 9px Barlow Condensed;font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:#14202b;background:#7fb0d6;padding:2px 5px;vertical-align:middle}.dwarf.species-working-student .portrait{background:linear-gradient(145deg,#24384a,#141d26);border-color:#4f7a9c}.dwarf p.traits{margin:0 0 7px;color:#8fb3cf}.recipe-hint,.recruit-hint{font:11px Barlow Condensed;line-height:1.4;color:#8fb3cf;margin:3px 13px}.panel.forge.locked{opacity:.6}.forge-limit{color:#d87f63!important;margin-top:4px!important}.recipe button:disabled{opacity:.5;cursor:not-allowed}
+
+.raid-hint{font:11px Barlow Condensed;line-height:1.4;color:#d87f63;margin:3px 13px}
+.raid{padding:13px}
+.raid p{font:12px Barlow Condensed;margin:4px 0 0;color:#c2ad8e}
+.raid.held{border-color:#4f7a4a}
+.raid.lost{border-color:#8a3f2c}
+.raid.lost h2{color:#d87f63}
+.fallen{padding:40px;text-align:center}
+.fallen h2{font-size:32px;color:#d87f63}
+.fallen p{color:#c2ad8e}
+.fallen button{border:0;background:#b57b32;color:#160f08;padding:10px 16px;font:700 12px Barlow Condensed;text-transform:uppercase;letter-spacing:.06em;cursor:pointer}

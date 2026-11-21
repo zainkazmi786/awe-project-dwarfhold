@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { beginExpedition } from "../api";
 import {
   advanceDay,
+  attackMessage,
   canAfford,
   canCraft,
   canExplore,
@@ -71,6 +72,8 @@ const initialState: ColonyState = {
   ],
   crafting: [],
   recruited: false,
+  lastAttack: null,
+  destroyed: false,
 };
 
 const welcome: Activity = {
@@ -164,7 +167,7 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    if (paused) return;
+    if (paused || colony.destroyed) return;
 
     const timer = window.setInterval(
       () => setColony((current) => advanceDay(current)),
@@ -172,7 +175,7 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     );
 
     return () => window.clearInterval(timer);
-  }, [paused]);
+  }, [paused, colony.destroyed]);
 
   // D1: after each day's meal, report dwarves who went hungry.
   // Done in an effect (not inside advanceDay / the setColony updater) so the
@@ -226,6 +229,20 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
       );
     }
   }, [colony.recruited]);
+
+  // D7: log a new raid once. Starts from the loaded report, so a refresh doesn't log it again.
+  const loggedAttack = useRef(colony.lastAttack);
+  useEffect(() => {
+    const attack = colony.lastAttack;
+    if (!attack || attack === loggedAttack.current) return;
+    loggedAttack.current = attack;
+    addActivity(attackMessage(attack), attack.defended ? "good" : "warning");
+  }, [colony.lastAttack]);
+
+  function restart() {
+    setColony(initialState);
+    setActivities([welcome]);
+  }
 
   function assignDwarf(id: string, assignment: JobType) {
     // D1: a dwarf on an expedition cannot take a second activity.
@@ -337,7 +354,13 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     try {
       const result = await beginExpedition(dwarfId, destination);
       setColony((current) =>
-        returnFromExpedition(current, dwarfId, result.rewards, result.recruit),
+        returnFromExpedition(
+          current,
+          dwarfId,
+          result.rewards,
+          result.recruit,
+          result.attack,
+        ),
       );
       addActivity(result.message, "good");
     } catch (error) {
@@ -378,6 +401,7 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     startCraft: beginCraft,
     cancelCraft: stopCraft,
     sendExpedition,
+    restart,
   };
 
   return <ColonyContext value={value}>{children}</ColonyContext>;

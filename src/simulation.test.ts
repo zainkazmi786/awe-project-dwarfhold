@@ -17,6 +17,8 @@ const colony = (dwarves: Dwarf[], food = 5): ColonyState => ({
   dwarves,
   crafting: [],
   recruited: false,
+  lastAttack: null,
+  destroyed: false,
 });
 
 describe("colony simulation", () => {
@@ -342,5 +344,66 @@ describe("D6: the working student", () => {
   it("rejects a version 1 save (no species) as incompatible", () => {
     const raw = JSON.stringify({ version: 1, colony: colony([dwarf()]), activities: [] });
     expect(parseSave(raw)).toEqual({ status: "invalid", reason: "incompatible" });
+  });
+});
+
+describe("D7: goblin raid", () => {
+  const raid = { force: 6 };
+  const raided = (stock: Partial<ColonyState["resources"]>, dwarves = [dwarf()]) =>
+    returnFromExpedition(departExpedition(withStock(dwarves, stock), "d1", "goblin-warrens"), "d1", {}, undefined, raid);
+
+  it("more weapons than attackers: defended, 6 weapons used, nothing looted", () => {
+    const next = raided({ weapons: 8, tools: 2, stone: 5, wood: 5, food: 5 });
+    expect(next.resources).toMatchObject({ weapons: 2, tools: 2, stone: 5, wood: 5, food: 5 });
+    expect(next.lastAttack).toMatchObject({ defended: true, weaponsUsed: 6, losses: {}, destroyed: false });
+  });
+
+  it("weapons equal to attackers: defended, all weapons used", () => {
+    const next = raided({ weapons: 6, stone: 5 });
+    expect(next.resources).toMatchObject({ weapons: 0, stone: 5 });
+    expect(next.lastAttack?.defended).toBe(true);
+  });
+
+  it("fewer weapons: the rest loot tools, then stone, then wood, then food", () => {
+    const next = raided({ weapons: 2, tools: 1, stone: 2, wood: 2, food: 9 });
+    expect(next.resources).toMatchObject({ weapons: 0, tools: 0, stone: 0, wood: 1, food: 9 });
+    expect(next.lastAttack).toMatchObject({ defended: false, weaponsUsed: 2, losses: { tools: 1, stone: 2, wood: 1 } });
+    expect(next.destroyed).toBe(false);
+  });
+
+  it("nothing left after the raid: destroyed, and days stop", () => {
+    const next = raided({ weapons: 1, stone: 2, food: 3 });
+    expect(next.resources).toMatchObject({ weapons: 0, tools: 0, stone: 0, wood: 0, food: 0 });
+    expect(next.destroyed).toBe(true);
+    expect(advanceDay(next)).toBe(next);
+  });
+
+  it("rewards arrive before the raid and can be looted", () => {
+    const away = departExpedition(withStock([dwarf()], {}), "d1", "goblin-warrens");
+    const next = returnFromExpedition(away, "d1", { stone: 6 }, undefined, { force: 4 });
+    expect(next.resources.stone).toBe(2);
+  });
+
+  it("equipped tools are safe", () => {
+    const next = raided({ food: 10 }, [dwarf({ hasTool: true })]);
+    expect(next.dwarves[0].hasTool).toBe(true);
+  });
+
+  it("a failed trip or a second return never attacks", () => {
+    const away = departExpedition(withStock([dwarf()], { stone: 9 }), "d1", "goblin-warrens");
+    const failed = returnFromExpedition(away, "d1");
+    expect(failed.resources.stone).toBe(9);
+    expect(failed.lastAttack).toBeNull();
+    const back = returnFromExpedition(away, "d1", {}, undefined, raid);
+    expect(returnFromExpedition(back, "d1", {}, undefined, raid)).toBe(back);
+  });
+
+  it("the raid is saved and restored; a broken report is rejected", () => {
+    const next = raided({ weapons: 2, stone: 9 });
+    const ok = parseSave(serializeSave({ colony: next, activities: [] }));
+    expect(ok).toEqual({ status: "ok", data: { colony: next, activities: [] } });
+    const broken = { ...next, lastAttack: { day: 1 } };
+    expect(parseSave(JSON.stringify({ version: SAVE_VERSION, colony: broken, activities: [] })))
+      .toEqual({ status: "invalid", reason: "corrupt" });
   });
 });

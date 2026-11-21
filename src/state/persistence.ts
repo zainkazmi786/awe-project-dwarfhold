@@ -1,9 +1,9 @@
 import { recipes, speciesTraits } from "../simulation";
-import type { Activity, ColonyState, CraftJob, Dwarf } from "../types";
+import type { Activity, AttackReport, ColonyState, CraftJob, Dwarf } from "../types";
 
 /** D5: saved in localStorage under this key. Bump SAVE_VERSION when the state shape changes. */
 export const SAVE_KEY = "dwarfhold-save";
-export const SAVE_VERSION = 2; // v2: D6 adds Dwarf.species and ColonyState.recruited
+export const SAVE_VERSION = 3; // v2: D6 species/recruited, v3: D7 lastAttack/destroyed
 
 export interface SaveData {
   colony: ColonyState;
@@ -63,8 +63,22 @@ function isActivity(value: unknown): value is Activity {
   );
 }
 
+function isAttackReport(value: unknown): value is AttackReport {
+  return (
+    isObject(value) &&
+    isNumber(value.day) &&
+    isNumber(value.force) &&
+    isNumber(value.weaponsUsed) &&
+    isObject(value.losses) &&
+    Object.entries(value.losses).every(([key, amount]) => (RESOURCE_KEYS as readonly string[]).includes(key) && isNumber(amount)) &&
+    typeof value.defended === "boolean" &&
+    typeof value.destroyed === "boolean"
+  );
+}
+
 export function isColonyState(value: unknown): value is ColonyState {
   if (!isObject(value) || !isNumber(value.day) || typeof value.recruited !== "boolean") return false;
+  if (typeof value.destroyed !== "boolean" || (value.lastAttack !== null && !isAttackReport(value.lastAttack))) return false;
   const { resources, dwarves, crafting } = value;
   if (!isObject(resources) || !RESOURCE_KEYS.every((key) => isNumber(resources[key]) && resources[key] >= 0)) return false;
   if (!Array.isArray(dwarves) || !dwarves.every(isDwarf)) return false;
