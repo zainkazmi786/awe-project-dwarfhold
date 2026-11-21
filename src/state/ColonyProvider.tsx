@@ -18,6 +18,7 @@ import {
 } from "../simulation";
 import type { Activity, ColonyState, JobType, Recipe } from "../types";
 import { ColonyContext, type ColonyContextValue } from "./ColonyContext";
+import { loadSave, writeSave, type SaveData } from "./persistence";
 
 const initialState: ColonyState = {
   day: 12,
@@ -65,17 +66,78 @@ const initialState: ColonyState = {
   crafting: [],
 };
 
+const welcome: Activity = {
+  id: "welcome",
+  day: initialState.day,
+  message: "The forge fires are lit. Stonehome wakes.",
+};
+
+/**
+ * D5: builds the starting state from localStorage.
+ * - valid save: restore it and log what continues (forge orders, expeditions)
+ * - corrupt / incompatible save: start a new colony and say so
+ * - no save: start a new colony
+ */
+function boot(): SaveData {
+  const result = loadSave();
+
+  if (result.status === "invalid") {
+    return {
+      colony: initialState,
+      activities: [
+        {
+          id: crypto.randomUUID(),
+          day: initialState.day,
+          message:
+            result.reason === "incompatible"
+              ? "The saved colony is from an older version — a new colony was founded."
+              : "The saved colony was unreadable — a new colony was founded.",
+          tone: "warning",
+        },
+        welcome,
+      ],
+    };
+  }
+  if (result.status === "empty") {
+    return { colony: initialState, activities: [welcome] };
+  }
+
+  const { colony, activities } = result.data;
+  const notes: Activity[] = [
+    ...colony.crafting.map((job) => ({
+      id: crypto.randomUUID(),
+      day: colony.day,
+      message: `Forge order resumed: ${colony.dwarves.find((d) => d.id === job.dwarfId)?.name}'s ${job.recipe} is ready on day ${job.readyDay}.`,
+    })),
+    ...colony.dwarves
+      .filter((dwarf) => dwarf.status === "expedition")
+      .map((dwarf) => ({
+        id: crypto.randomUUID(),
+        day: colony.day,
+        message: `${dwarf.name}'s expedition to ${dwarf.destination?.replace("-", " ")} resumed after the refresh.`,
+      })),
+    {
+      id: crypto.randomUUID(),
+      day: colony.day,
+      message: `Colony restored on day ${colony.day}.`,
+      tone: "good" as const,
+    },
+  ];
+  return { colony, activities: [...notes, ...activities].slice(0, 6) };
+}
+
 export function ColonyProvider({ children }: { children: ReactNode }) {
-  const [colony, setColony] = useState(initialState);
+  // Lazy initializer: localStorage is read once, on the first render.
+  const [start] = useState(boot);
+  const [colony, setColony] = useState(start.colony);
   const [paused, setPaused] = useState(false);
   const [expeditionPending, setExpeditionPending] = useState(false);
-  const [activities, setActivities] = useState<Activity[]>([
-    {
-      id: "welcome",
-      day: 12,
-      message: "The forge fires are lit. Stonehome wakes.",
-    },
-  ]);
+  const [activities, setActivities] = useState<Activity[]>(start.activities);
+
+  // D5: save after every change of the colony or the log.
+  useEffect(() => {
+    writeSave({ colony, activities });
+  }, [colony, activities]);
 
   // D4: current day for messages that arrive later (slow expedition requests)
   const today = useRef(colony.day);
@@ -108,7 +170,11 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
   // D1: after each day's meal, report dwarves who went hungry.
   // Done in an effect (not inside advanceDay / the setColony updater) so the
   // message is logged once per day even if React re-runs state updaters.
+  // D5: the ref skips the first run, so a restored hungry dwarf isn't reported again on every refresh.
+  const hungerLoggedDay = useRef(colony.day);
   useEffect(() => {
+    if (hungerLoggedDay.current === colony.day) return;
+    hungerLoggedDay.current = colony.day;
     const hungry = colony.dwarves.filter((dwarf) => dwarf.hungry);
     if (hungry.length === 0) return;
 
@@ -230,9 +296,14 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
 
     inFlight.current = true;
     setExpeditionPending(true);
-    setColony((current) => departExpedition(current, dwarfId));
+    setColony((current) => departExpedition(current, dwarfId, destination));
     addActivity(`${dwarf.name} departed for ${destination.replace("-", " ")}.`);
 
+    await runTrip(dwarfId, dwarf.name, destination);
+  }
+
+  /** D4/D5: the server request and its result. Caller sets inFlight and pending first. */
+  async function runTrip(dwarfId: string, name: string, destination: string) {
     try {
       const result = await beginExpedition(dwarfId, destination);
       setColony((current) =>
@@ -243,7 +314,7 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
       // D4: failed request: no rewards, dwarf comes home
       setColony((current) => returnFromExpedition(current, dwarfId));
       addActivity(
-        `${error instanceof Error ? error.message : "The expedition was lost from view."} ${dwarf.name} returned empty-handed.`,
+        `${error instanceof Error ? error.message : "The expedition was lost from view."} ${name} returned empty-handed.`,
         "warning",
       );
     } finally {
@@ -251,6 +322,19 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
       setExpeditionPending(false);
     }
   }
+
+  // D5: a trip interrupted by a refresh is sent to the server again (no second departure).
+  // StrictMode runs this effect twice in dev; inFlight blocks the second send.
+  useEffect(() => {
+    const traveller = colony.dwarves.find(
+      (dwarf) => dwarf.status === "expedition" && dwarf.destination,
+    );
+    if (!traveller || inFlight.current) return;
+
+    inFlight.current = true;
+    setExpeditionPending(true);
+    void runTrip(traveller.id, traveller.name, traveller.destination!);
+  }, []); // only on mount
 
   const value: ColonyContextValue = {
     colony,

@@ -135,12 +135,12 @@ export function canExplore(state: ColonyState, id: string): boolean {
   return !!dwarf && dwarf.status !== "expedition" && !dwarf.hungry && !isCrafting(state, id);
 }
 
-/** D4: marks the dwarf as travelling. The equipped tool goes along. */
-export function departExpedition(state: ColonyState, id: string): ColonyState {
+/** D4: marks the dwarf as travelling. The equipped tool goes along. D5: remembers the destination. */
+export function departExpedition(state: ColonyState, id: string, destination: string): ColonyState {
   if (!canExplore(state, id)) return state;
   return {
     ...state,
-    dwarves: state.dwarves.map((item) => (item.id === id ? { ...item, status: "expedition" } : item)),
+    dwarves: state.dwarves.map((item) => (item.id === id ? { ...item, status: "expedition", destination } : item)),
   };
 }
 
@@ -156,7 +156,9 @@ export function returnFromExpedition(state: ColonyState, id: string, rewards: Pa
     ...state,
     resources,
     dwarves: state.dwarves.map((item) =>
-      item.id === id ? { ...item, status: item.assignment ? "working" : "idle" } : item,
+      item.id === id
+        ? { ...item, status: item.assignment ? "working" : "idle", destination: undefined }
+        : item,
     ),
   };
 }

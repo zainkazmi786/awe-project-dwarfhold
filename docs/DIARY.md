@@ -118,3 +118,50 @@
 - failed trip: resources unchanged, dwarf idle again
 - one day away: no production, no food eaten, tool kept after return
 - Manual check (Playwright, 10 s delayed response): double click sent 1 request; result logged on day 13; Blocked Pass brought Dori back
+
+## 2026-11-21 — D5: Save and restore
+
+### Decisions
+| Decision | Choice | Reason |
+|---|---|---|
+| Storage | `localStorage`, key `dwarfhold-save` | Built in, synchronous, the state is small JSON |
+| Format | `{ version: 1, colony, activities }` | `version` detects incompatible saves |
+| What is saved | `colony` (day, resources, dwarves, crafting) and the Chronicle | `paused` is not saved, so the game always starts running |
+| When | After every change of `colony` or `activities` (`useEffect`) | Nothing meaningful is lost on refresh |
+| Corrupt / incompatible save | Start a new colony and log a warning | Safe fallback, visible to the player |
+| Expedition interrupted by refresh | **Resume:** the request is sent again for the same destination. The dwarf stays away until the result arrives. | The player doesn't lose the trip. Rewards are still applied once (`returnFromExpedition` ignores a dwarf who isn't away). |
+| Forge order interrupted by refresh | **Continue:** the order is saved and finishes on its `readyDay` | Orders are day-based, so `advanceDay` already handles them |
+
+### Interface changes
+- `src/types.ts`: `Dwarf.destination?: string`, set while on an expedition.
+- `departExpedition(state, id, destination)`: new required `destination` parameter.
+
+### Code changes
+| File | Change |
+|---|---|
+| `src/state/persistence.ts` (new) | `parseSave(raw)` is pure and validates the JSON, the version and every field. Results are `ok`, `empty`, or `invalid` with `corrupt` / `incompatible`. Also `serializeSave`, plus `loadSave` and `writeSave`, which wrap `localStorage` in try/catch. |
+| `src/simulation.ts` | `departExpedition` stores `destination`. `returnFromExpedition` clears it. |
+| `src/state/ColonyProvider.tsx` | `boot()` loads the save via the `useState` initializer and builds the Chronicle notes ("Colony restored", "Forge order resumed", "expedition resumed", or the fallback warning). A save effect runs on every change. The trip logic is split into `runTrip()`, and `sendExpedition` is now checks, then departure, then `runTrip`. A mount effect resumes a saved trip by calling `runTrip` only (no second departure); `inFlight` blocks StrictMode's double run. The hunger message is skipped on mount so a refresh doesn't repeat it. |
+| `src/pages/ColonyPage.tsx`, `src/pages/ForgePage.tsx` | Hint texts explaining the refresh policy. |
+| `src/simulation.test.ts` | Expedition tests pass a destination. 7 D5 tests added. |
+
+### Validation rules (`parseSave`)
+- `day` is a finite number.
+- Every resource key exists and is a number ≥ 0.
+- Each dwarf has the correct field types, plus a valid `assignment`, `status` and optional `destination`.
+- Each forge order refers to an existing dwarf, a known recipe and a numeric `readyDay`.
+- Each Chronicle entry has the correct field types.
+
+### Tests (`npm test`, 32/32 passing)
+- destination is stored on departure and cleared on return
+- a saved colony is restored exactly (forge order and traveller included)
+- a restored forge order finishes on its ready day
+- missing save gives `empty`
+- broken JSON gives `corrupt`
+- wrong version gives `incompatible`
+- wrong shapes (string day, negative stone, unknown status, order for an unknown dwarf) give `corrupt`
+
+### Known limitations / follow-ups
+- A dwarf saved as away **without** a destination is not handled (deliberately left out for now). They would stay away.
+- Days only pass while the tab is open; there is no offline progress. A partly elapsed day (< 8 s) restarts after a refresh.
+- No "New colony" button. To reset, clear `dwarfhold-save` in the browser's devtools.

@@ -65,7 +65,8 @@ export function ForgePage() {
           </label>
           <p>
             Only fed dwarves assigned to the Ember Forge can craft, one order
-            each. Materials are paid at the start.
+            each. Materials are paid at the start. Orders are saved and
+            continue after a page refresh.
           </p>
         </section>
 

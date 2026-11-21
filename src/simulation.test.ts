@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceDay, cancelCraft, departExpedition, equipTool, feedDwarves, returnFromExpedition, returnTool, startCraft,
 } from "./simulation";
+import { parseSave, SAVE_VERSION, serializeSave } from "./state/persistence";
 import type { ColonyState, Dwarf } from "./types";
 
 const dwarf = (overrides: Partial<Dwarf> = {}): Dwarf => ({
@@ -181,11 +182,11 @@ describe("D4: resilient expeditions", () => {
   it("refuses away, hungry and forging dwarves without changes", () => {
     const state = withStock([dwarf({ status: "expedition" }), dwarf({ id: "d2", hungry: true }), smith({ id: "d3" })], { wood: 9, stone: 9 });
     const forging = startCraft(state, "d3", "tool");
-    ["d1", "d2", "d3", "nobody"].forEach((id) => expect(departExpedition(forging, id)).toBe(forging));
+    ["d1", "d2", "d3", "nobody"].forEach((id) => expect(departExpedition(forging, id, "old-mine")).toBe(forging));
   });
 
   it("applies rewards exactly once", () => {
-    const away = departExpedition(colony([dwarf()]), "d1");
+    const away = departExpedition(colony([dwarf()]), "d1", "old-mine");
     const back = returnFromExpedition(away, "d1", rewards);
     expect(back.resources).toMatchObject({ stone: 8, tools: 1 });
     expect(back.dwarves[0].status).toBe("working");
@@ -194,15 +195,64 @@ describe("D4: resilient expeditions", () => {
 
   it("a failed trip gives nothing and frees the dwarf", () => {
     const start = colony([dwarf({ assignment: null, status: "idle" })]);
-    const back = returnFromExpedition(departExpedition(start, "d1"), "d1");
+    const back = returnFromExpedition(departExpedition(start, "d1", "old-mine"), "d1");
     expect(back.resources).toEqual(start.resources);
     expect(back.dwarves[0].status).toBe("idle");
   });
 
   it("while away for a day the dwarf neither works nor eats, and keeps the tool", () => {
-    const away = advanceDay(departExpedition(colony([dwarf({ hasTool: true })]), "d1"));
+    const away = advanceDay(departExpedition(colony([dwarf({ hasTool: true })]), "d1", "old-mine"));
     expect(away.resources).toMatchObject({ wood: 0, food: 5 });
     const back = returnFromExpedition(away, "d1", rewards);
     expect(back.dwarves[0]).toMatchObject({ status: "working", hasTool: true });
+  });
+});
+
+describe("D5: save and restore", () => {
+  const valid = () => colony([dwarf({ status: "expedition", destination: "old-mine" })]);
+  const save = (state: ColonyState) => serializeSave({ colony: state, activities: [] });
+
+  it("remembers the destination while away and clears it on return", () => {
+    const away = departExpedition(colony([dwarf()]), "d1", "old-mine");
+    expect(away.dwarves[0].destination).toBe("old-mine");
+    expect(returnFromExpedition(away, "d1").dwarves[0].destination).toBeUndefined();
+  });
+
+  it("restores a saved colony exactly, including forge orders and travellers", () => {
+    const state = { ...valid(), crafting: [{ dwarfId: "d1", recipe: "tool" as const, readyDay: 4 }] };
+    expect(parseSave(save(state))).toEqual({ status: "ok", data: { colony: state, activities: [] } });
+  });
+
+  it("a restored forge order still finishes on its ready day", () => {
+    const state = { ...colony([smith()]), crafting: [{ dwarfId: "d1", recipe: "tool" as const, readyDay: 2 }] };
+    const result = parseSave(save(state));
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(advanceDay(result.data.colony).resources.tools).toBe(1);
+  });
+
+  it("treats a missing save as empty", () => {
+    expect(parseSave(null)).toEqual({ status: "empty" });
+  });
+
+  it("rejects broken JSON as corrupt", () => {
+    expect(parseSave("{not json")).toEqual({ status: "invalid", reason: "corrupt" });
+  });
+
+  it("rejects another version as incompatible", () => {
+    const raw = JSON.stringify({ version: 0, colony: valid(), activities: [] });
+    expect(parseSave(raw)).toEqual({ status: "invalid", reason: "incompatible" });
+  });
+
+  it("rejects wrong shapes as corrupt", () => {
+    const broken = [
+      { ...valid(), day: "12" },
+      { ...valid(), resources: { ...valid().resources, stone: -1 } },
+      { ...valid(), dwarves: [{ ...dwarf(), status: "flying" }] },
+      { ...valid(), crafting: [{ dwarfId: "ghost", recipe: "tool", readyDay: 3 }] },
+    ];
+    broken.forEach((state) =>
+      expect(parseSave(JSON.stringify({ version: SAVE_VERSION, colony: state, activities: [] })))
+        .toEqual({ status: "invalid", reason: "corrupt" }),
+    );
   });
 });

@@ -154,7 +154,8 @@ export function ColonyPage() {
           <p>
             Only a fed dwarf at home who is not forging can leave. The dwarf is
             unavailable while travelling and takes an equipped tool along. A
-            failed trip brings the dwarf back with no rewards.
+            failed trip brings the dwarf back with no rewards. If the page is
+            refreshed during a trip, the expedition resumes automatically.
           </p>
         </section>
 

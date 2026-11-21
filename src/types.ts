@@ -14,6 +14,7 @@ export interface Dwarf {
      specialty?: Exclude<JobType, null>;
      hungry: boolean; // true = not fed at last meal, will not produce next day
      hasTool: boolean; // D2: carries one tool from storage
+     destination?: string; // D5: set while on expedition, so the trip can resume after a refresh
 }
 
 // D3: one forge order per smith, materials already paid
