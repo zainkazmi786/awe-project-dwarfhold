@@ -1,7 +1,8 @@
-export type ResourceKey = "wood" | "stone" | "food" | "tools";
+export type ResourceKey = "wood" | "stone" | "food" | "tools" | "weapons";
 export type JobType = "woodcutting" | "mining" | "farming" | null;
 export type DwarfStatus = "idle" | "working" | "expedition";
-export interface Resources { wood: number; stone: number; food: number; tools: number }
+export interface Resources { wood: number; stone: number; food: number; tools: number; weapons: number }
+export type Recipe = "tool" | "weapon";
 
 export interface Dwarf { 
     id: string;
@@ -12,6 +13,7 @@ export interface Dwarf {
      status: DwarfStatus; 
      specialty?: Exclude<JobType, null>;
      hungry: boolean; // true = not fed at last meal, will not produce next day
+     hasTool: boolean; // D2: carries one tool from storage
 }
 
 export interface ColonyState { 

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Chronicle } from "../components/Chronicle";
 import { DwarfRoster } from "../components/DwarfRoster";
-import { eatsColonyFood, isProducing, jobLabel, production } from "../simulation";
+import {
+  dailyOutput as outputOf,
+  eatsColonyFood,
+  jobLabel,
+  production,
+} from "../simulation";
 import { useColony } from "../state/ColonyContext";
 import type { ResourceKey } from "../types";
 
@@ -11,6 +16,8 @@ export function ColonyPage() {
     activities,
     expeditionPending,
     assignDwarf,
+    equipTool,
+    returnTool,
     sendExpedition,
   } = useColony();
   const [destination, setDestination] = useState("crystal-cave");
@@ -19,12 +26,9 @@ export function ColonyPage() {
   // Same rules as advanceDay: only producing dwarves count, only present dwarves eat.
   const dailyOutput = colony.dwarves.reduce<Record<ResourceKey, number>>(
     (total, dwarf) => {
-      if (isProducing(dwarf)) {
-        const output = production[dwarf.assignment!];
-        Object.entries(output).forEach(([resource, amount]) => {
-          total[resource as ResourceKey] += amount ?? 0;
-        });
-      }
+      Object.entries(outputOf(dwarf)).forEach(([resource, amount]) => {
+        total[resource as ResourceKey] += amount ?? 0;
+      });
       return total;
     },
     {
@@ -32,12 +36,19 @@ export function ColonyPage() {
       stone: 0,
       food: -colony.dwarves.filter(eatsColonyFood).length,
       tools: 0,
+      weapons: 0,
     },
   );
 
   return (
     <div className="dashboard">
-      <DwarfRoster dwarves={colony.dwarves} onAssign={assignDwarf} />
+      <DwarfRoster
+        dwarves={colony.dwarves}
+        toolsInStorage={colony.resources.tools}
+        onAssign={assignDwarf}
+        onEquip={equipTool}
+        onReturn={returnTool}
+      />
 
       <section className="center-stack">
         <section className="panel production">
@@ -62,9 +73,8 @@ export function ColonyPage() {
                 <h3>{jobLabel(job)}</h3>
                 <p>
                   {
-                    colony.dwarves.filter(
-                      (dwarf) => dwarf.assignment === job,
-                    ).length
+                    colony.dwarves.filter((dwarf) => dwarf.assignment === job)
+                      .length
                   }{" "}
                   assigned
                 </p>
@@ -82,8 +92,12 @@ export function ColonyPage() {
           </div>
           <p className="food-rule">
             Each dwarf at home eats 1 ration at the end of the day, in roster
-            order. Dwarves on expedition forage for themselves. A dwarf who
-            gets no ration goes hungry and produces nothing the next day.
+            order. Dwarves on expedition forage for themselves. A dwarf who gets
+            no ration goes hungry and produces nothing the next day.
+          </p>
+          <p className="food-rule">
+            An equipped tool adds +1 of the dwarf's resource per day while they
+            work.
           </p>
         </section>
       </section>

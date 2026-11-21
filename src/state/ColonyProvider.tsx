@@ -1,10 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { beginExpedition } from "../api";
-import { advanceDay, jobLabel } from "../simulation";
+import {
+  advanceDay,
+  canAfford,
+  craft,
+  equipTool,
+  jobLabel,
+  recipes,
+  returnTool,
+} from "../simulation";
 import type {
   Activity,
   ColonyState,
   JobType,
+  Recipe,
   ResourceKey,
 } from "../types";
 import { ColonyContext, type ColonyContextValue } from "./ColonyContext";
@@ -16,6 +25,7 @@ const initialState: ColonyState = {
     stone: 9,
     food: 18,
     tools: 1,
+    weapons: 0,
   },
   dwarves: [
     {
@@ -27,6 +37,7 @@ const initialState: ColonyState = {
       status: "working",
       specialty: "mining",
       hungry: false,
+      hasTool: false,
     },
     {
       id: "dwarf-2",
@@ -37,6 +48,7 @@ const initialState: ColonyState = {
       status: "working",
       specialty: "woodcutting",
       hungry: false,
+      hasTool: false,
     },
     {
       id: "dwarf-3",
@@ -46,6 +58,7 @@ const initialState: ColonyState = {
       assignment: null,
       status: "idle",
       hungry: false,
+      hasTool: false,
     },
   ],
 };
@@ -61,6 +74,15 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
       message: "The forge fires are lit. Stonehome wakes.",
     },
   ]);
+
+  function addActivity(message: string, tone?: Activity["tone"]) {
+    setActivities((current) =>
+      [
+        { id: crypto.randomUUID(), day: colony.day, message, tone },
+        ...current,
+      ].slice(0, 6),
+    );
+  }
 
   useEffect(() => {
     if (paused) return;
@@ -97,7 +119,9 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
 
   function assignDwarf(id: string, assignment: JobType) {
     // D1: a dwarf on an expedition cannot take a second activity.
-    if (colony.dwarves.find((item) => item.id === id)?.status === "expedition") {
+    if (
+      colony.dwarves.find((item) => item.id === id)?.status === "expedition"
+    ) {
       return;
     }
 
@@ -127,39 +151,34 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  function craftTool() {
-    if (colony.resources.wood < 3) {
-      setActivities((current) => [
-        {
-          id: crypto.randomUUID(),
-          day: colony.day,
-          message: "The forge needs more timber.",
-          tone: "warning" as const,
-        },
-        ...current,
-      ]);
+  function equip(id: string) {
+    const dwarf = colony.dwarves.find((item) => item.id === id);
+    if (!dwarf || equipTool(colony, id) === colony) {
+      addActivity("No tool available to equip.", "warning");
       return;
     }
+    setColony((current) => equipTool(current, id));
+    addActivity(`${dwarf.name} equipped a tool.`);
+  }
 
-    setColony((current) => ({
-      ...current,
-      resources: {
-        ...current.resources,
-        wood: current.resources.wood - 3,
-        stone: current.resources.stone - 2,
-        tools: current.resources.tools + 1,
-      },
-    }));
-    setActivities((current) =>
-      [
-        {
-          id: crypto.randomUUID(),
-          day: colony.day,
-          message: "A sturdy iron tool joins the stores.",
-          tone: "good" as const,
-        },
-        ...current,
-      ].slice(0, 6),
+  function unequip(id: string) {
+    const dwarf = colony.dwarves.find((item) => item.id === id);
+    if (!dwarf || returnTool(colony, id) === colony) return;
+    setColony((current) => returnTool(current, id));
+    addActivity(`${dwarf.name} returned a tool to storage.`);
+  }
+
+  function craftItem(recipe: Recipe) {
+    if (!canAfford(colony.resources, recipes[recipe].cost)) {
+      addActivity(`Not enough materials to forge a ${recipe}.`, "warning");
+      return;
+    }
+    setColony((current) => craft(current, recipe));
+    addActivity(
+      recipe === "tool"
+        ? "A sturdy iron tool joins the stores."
+        : "A new weapon joins the armoury.",
+      "good",
     );
   }
 
@@ -242,7 +261,9 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     expeditionPending,
     togglePaused: () => setPaused((value) => !value),
     assignDwarf,
-    craftTool,
+    equipTool: equip,
+    returnTool: unequip,
+    craft: craftItem,
     sendExpedition,
   };
 

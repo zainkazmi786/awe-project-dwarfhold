@@ -50,3 +50,25 @@
 - Hunger applies with a one-day delay: hungry at the end of day N means no production on day N+1. This is shown in the UI text.
 - `craftTool` can still make stone negative. To be fixed in D2/D3.
 - Some Chronicle entries still skip `.slice(0, 6)`.
+
+## 2026-11-21 — D2: Tools, weapons and equipment
+
+### Decisions
+| Decision | Choice |
+|---|---|
+| Tool bonus | +1 of the assigned resource for all three jobs, only while `isProducing` (working, assigned, not hungry) |
+| Equip / return | Any dwarf at home without a tool, if storage has ≥ 1. A travelling dwarf can't equip or return. |
+| `tools` counter | Counts tools in storage only. Equipped tools are shown on the dwarf card. |
+| Weapon recipe | 3 wood + 3 stone → 1 weapon, stored as a colony resource (`weapons`) |
+
+### Code changes
+- `src/types.ts`: `weapons` in `Resources`, `hasTool` on `Dwarf`, new `Recipe` type.
+- `src/simulation.ts`: `dailyOutput` (production + tool bonus, used by `advanceDay` and the forecast), pure `equipTool`, `returnTool`, `canAfford`, `craft` with a `recipes` table. `craft` checks all materials, so stone can no longer go negative.
+- `src/state/ColonyProvider.tsx`: `craftTool` replaced by `craft(recipe)`, new `equipTool` / `returnTool` actions, `addActivity` helper (always keeps 6 entries).
+- UI: Equip / Return button and "⚒️ equipped" badge in `DwarfRoster.tsx`, weapons in `ResourceBar.tsx`, two recipes on `ForgePage.tsx`.
+
+### Tests (`npm test`, 16/16 passing)
+- tool bonus +1 (wood 3 → 4, stone 2 → 3), no bonus when hungry or unassigned
+- equip / return moves the tool between storage and dwarf; second tool, empty storage and travelling dwarf are refused
+- total tools (storage + equipped) stays constant
+- weapon costs 3 wood + 3 stone; missing materials change nothing
