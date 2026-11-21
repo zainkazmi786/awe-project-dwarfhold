@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Chronicle } from "../components/Chronicle";
 import { DwarfRoster } from "../components/DwarfRoster";
 import {
+  canExplore,
   dailyOutput as outputOf,
   eatsColonyFood,
   jobLabel,
@@ -120,8 +121,13 @@ export function ColonyPage() {
               onChange={(event) => setExpeditionDwarf(event.target.value)}
             >
               {colony.dwarves.map((dwarf) => (
-                <option key={dwarf.id} value={dwarf.id}>
+                <option
+                  key={dwarf.id}
+                  value={dwarf.id}
+                  disabled={!canExplore(colony, dwarf.id)}
+                >
                   {dwarf.name}
+                  {canExplore(colony, dwarf.id) ? "" : " (unavailable)"}
                 </option>
               ))}
             </select>
@@ -146,8 +152,9 @@ export function ColonyPage() {
             {expeditionPending ? "Beyond the gate…" : "Send expedition"}
           </button>
           <p>
-            A result returns in one request. The selected dwarf is unavailable
-            while travelling.
+            Only a fed dwarf at home who is not forging can leave. The dwarf is
+            unavailable while travelling and takes an equipped tool along. A
+            failed trip brings the dwarf back with no rewards.
           </p>
         </section>
 

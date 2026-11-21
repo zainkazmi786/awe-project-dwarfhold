@@ -95,3 +95,26 @@
 - weapon arrives after exactly 3 days
 - non-smith, hungry, travelling, unknown and busy dwarves are refused with unchanged state
 - cancel restores resources exactly; a working smith with a tool produces nothing
+
+## 2026-11-21 — D4: Resilient expeditions
+
+### Decisions
+| Decision | Choice |
+|---|---|
+| Who can leave | A dwarf at home, not hungry and not forging (`canExplore`). Others are disabled in the Scout dropdown |
+| Equipped tool | Stays with the travelling dwarf. No bonus while away, still equipped on return |
+| Double send | Refused in code by a `useRef` flag (works before React re-renders), plus the disabled button |
+| Failed request | No rewards, dwarf goes back to `working`/`idle`, warning in the chronicle |
+| Result message | Stamped with the day the answer arrives, not the departure day |
+
+### Code changes
+- `src/simulation.ts`: pure `canExplore`, `departExpedition`, `returnFromExpedition`. Return only works if the dwarf is away, so rewards are applied once.
+- `src/state/ColonyProvider.tsx`: `sendExpedition` rewritten with eligibility check, `inFlight` ref, `catch` that brings the dwarf home and `finally` that clears the pending flag. `addActivity` uses a `today` ref for the current day.
+- `src/pages/ColonyPage.tsx`: ineligible dwarves are disabled in the Scout dropdown, and the rule text was updated.
+
+### Tests (`npm test`, 25/25 passing)
+- away, hungry, forging and unknown dwarves are refused with unchanged state
+- rewards applied once; a second return changes nothing
+- failed trip: resources unchanged, dwarf idle again
+- one day away: no production, no food eaten, tool kept after return
+- Manual check (Playwright, 10 s delayed response): double click sent 1 request; result logged on day 13; Blocked Pass brought Dori back

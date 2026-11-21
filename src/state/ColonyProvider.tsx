@@ -4,22 +4,19 @@ import {
   advanceDay,
   canAfford,
   canCraft,
+  canExplore,
   cancelCraft,
+  departExpedition,
   equipTool,
   finishedJobs,
   isCrafting,
   jobLabel,
   recipes,
+  returnFromExpedition,
   returnTool,
   startCraft,
 } from "../simulation";
-import type {
-  Activity,
-  ColonyState,
-  JobType,
-  Recipe,
-  ResourceKey,
-} from "../types";
+import type { Activity, ColonyState, JobType, Recipe } from "../types";
 import { ColonyContext, type ColonyContextValue } from "./ColonyContext";
 
 const initialState: ColonyState = {
@@ -80,10 +77,18 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
+  // D4: current day for messages that arrive later (slow expedition requests)
+  const today = useRef(colony.day);
+  useEffect(() => {
+    today.current = colony.day;
+  }, [colony.day]);
+  // D4: blocks a second send before React has re-rendered
+  const inFlight = useRef(false);
+
   function addActivity(message: string, tone?: Activity["tone"]) {
     setActivities((current) =>
       [
-        { id: crypto.randomUUID(), day: colony.day, message, tone },
+        { id: crypto.randomUUID(), day: today.current, message, tone },
         ...current,
       ].slice(0, 6),
     );
@@ -215,78 +220,36 @@ export function ColonyProvider({ children }: { children: ReactNode }) {
 
   async function sendExpedition(dwarfId: string, destination: string) {
     const dwarf = colony.dwarves.find((item) => item.id === dwarfId);
-    if (!dwarf) return;
-    if (isCrafting(colony, dwarfId)) {
-      addActivity(`${dwarf.name} is busy at the forge.`, "warning");
+    if (!dwarf || inFlight.current || !canExplore(colony, dwarfId)) {
+      addActivity(
+        `${dwarf?.name ?? "This dwarf"} can't leave now (away, hungry or forging).`,
+        "warning",
+      );
       return;
     }
 
+    inFlight.current = true;
     setExpeditionPending(true);
-    setColony((current) => ({
-      ...current,
-      dwarves: current.dwarves.map((item) =>
-        item.id === dwarf.id ? { ...item, status: "expedition" } : item,
-      ),
-    }));
-    setActivities((current) => [
-      {
-        id: crypto.randomUUID(),
-        day: colony.day,
-        message: `${dwarf.name} departed for ${destination.replace("-", " ")}.`,
-      },
-      ...current,
-    ]);
+    setColony((current) => departExpedition(current, dwarfId));
+    addActivity(`${dwarf.name} departed for ${destination.replace("-", " ")}.`);
 
     try {
-      const result = await beginExpedition(dwarf.id, destination);
-
-      setColony((current) => ({
-        ...current,
-        resources: Object.entries(result.rewards).reduce(
-          (all, [key, amount]) => ({
-            ...all,
-            [key]: all[key as ResourceKey] + (amount ?? 0),
-          }),
-          current.resources,
-        ),
-        dwarves: current.dwarves.map((item) =>
-          item.id === dwarf.id
-            ? {
-                ...item,
-                status: item.assignment ? "working" : "idle",
-              }
-            : item,
-        ),
-      }));
-      setActivities((current) =>
-        [
-          {
-            id: result.expeditionId,
-            day: colony.day,
-            message: result.message,
-            tone: "good" as const,
-          },
-          ...current,
-        ].slice(0, 6),
+      const result = await beginExpedition(dwarfId, destination);
+      setColony((current) =>
+        returnFromExpedition(current, dwarfId, result.rewards),
       );
+      addActivity(result.message, "good");
     } catch (error) {
-      setActivities((current) =>
-        [
-          {
-            id: crypto.randomUUID(),
-            day: colony.day,
-            message:
-              error instanceof Error
-                ? error.message
-                : "The expedition was lost from view.",
-            tone: "warning" as const,
-          },
-          ...current,
-        ].slice(0, 6),
+      // D4: failed request: no rewards, dwarf comes home
+      setColony((current) => returnFromExpedition(current, dwarfId));
+      addActivity(
+        `${error instanceof Error ? error.message : "The expedition was lost from view."} ${dwarf.name} returned empty-handed.`,
+        "warning",
       );
+    } finally {
+      inFlight.current = false;
+      setExpeditionPending(false);
     }
-
-    setExpeditionPending(false);
   }
 
   const value: ColonyContextValue = {

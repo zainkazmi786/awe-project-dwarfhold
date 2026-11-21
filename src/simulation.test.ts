@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { advanceDay, cancelCraft, equipTool, feedDwarves, returnTool, startCraft } from "./simulation";
+import {
+  advanceDay, cancelCraft, departExpedition, equipTool, feedDwarves, returnFromExpedition, returnTool, startCraft,
+} from "./simulation";
 import type { ColonyState, Dwarf } from "./types";
 
 const dwarf = (overrides: Partial<Dwarf> = {}): Dwarf => ({
@@ -170,5 +172,37 @@ describe("D3: crafting takes a smith and time", () => {
   it("a smith produces no resources while crafting", () => {
     const next = advanceDay(startCraft(stocked([smith({ hasTool: true })]), "d1", "tool"));
     expect(next.resources).toMatchObject({ wood: 17, stone: 18 });
+  });
+});
+
+describe("D4: resilient expeditions", () => {
+  const rewards = { stone: 8, tools: 1 };
+
+  it("refuses away, hungry and forging dwarves without changes", () => {
+    const state = withStock([dwarf({ status: "expedition" }), dwarf({ id: "d2", hungry: true }), smith({ id: "d3" })], { wood: 9, stone: 9 });
+    const forging = startCraft(state, "d3", "tool");
+    ["d1", "d2", "d3", "nobody"].forEach((id) => expect(departExpedition(forging, id)).toBe(forging));
+  });
+
+  it("applies rewards exactly once", () => {
+    const away = departExpedition(colony([dwarf()]), "d1");
+    const back = returnFromExpedition(away, "d1", rewards);
+    expect(back.resources).toMatchObject({ stone: 8, tools: 1 });
+    expect(back.dwarves[0].status).toBe("working");
+    expect(returnFromExpedition(back, "d1", rewards)).toBe(back);
+  });
+
+  it("a failed trip gives nothing and frees the dwarf", () => {
+    const start = colony([dwarf({ assignment: null, status: "idle" })]);
+    const back = returnFromExpedition(departExpedition(start, "d1"), "d1");
+    expect(back.resources).toEqual(start.resources);
+    expect(back.dwarves[0].status).toBe("idle");
+  });
+
+  it("while away for a day the dwarf neither works nor eats, and keeps the tool", () => {
+    const away = advanceDay(departExpedition(colony([dwarf({ hasTool: true })]), "d1"));
+    expect(away.resources).toMatchObject({ wood: 0, food: 5 });
+    const back = returnFromExpedition(away, "d1", rewards);
+    expect(back.dwarves[0]).toMatchObject({ status: "working", hasTool: true });
   });
 });

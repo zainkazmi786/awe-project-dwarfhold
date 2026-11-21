@@ -129,6 +129,38 @@ export function cancelCraft(state: ColonyState, id: string): ColonyState {
   return { ...state, resources, crafting: state.crafting.filter((item) => item !== job) };
 }
 
+/** D4: at home, fed and not busy at the forge. */
+export function canExplore(state: ColonyState, id: string): boolean {
+  const dwarf = state.dwarves.find((item) => item.id === id);
+  return !!dwarf && dwarf.status !== "expedition" && !dwarf.hungry && !isCrafting(state, id);
+}
+
+/** D4: marks the dwarf as travelling. The equipped tool goes along. */
+export function departExpedition(state: ColonyState, id: string): ColonyState {
+  if (!canExplore(state, id)) return state;
+  return {
+    ...state,
+    dwarves: state.dwarves.map((item) => (item.id === id ? { ...item, status: "expedition" } : item)),
+  };
+}
+
+/** D4: brings the dwarf back and adds rewards (none on failure). Only works once per trip. */
+export function returnFromExpedition(state: ColonyState, id: string, rewards: Partial<Resources> = {}): ColonyState {
+  const dwarf = state.dwarves.find((item) => item.id === id);
+  if (!dwarf || dwarf.status !== "expedition") return state;
+  const resources = { ...state.resources };
+  Object.entries(rewards).forEach(([resource, amount]) => {
+    resources[resource as keyof Resources] += amount ?? 0;
+  });
+  return {
+    ...state,
+    resources,
+    dwarves: state.dwarves.map((item) =>
+      item.id === id ? { ...item, status: item.assignment ? "working" : "idle" } : item,
+    ),
+  };
+}
+
 export const jobLabel = (job: JobType) => job ? ({
   woodcutting: "Woodcutting",
   mining: "Deep Mining",
